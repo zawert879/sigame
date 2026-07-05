@@ -1,0 +1,7 @@
+version: "3"
+services:
+  web:
+    image: si-game-admin
+    restart: always
+    ports:
+      - "3021:3000"

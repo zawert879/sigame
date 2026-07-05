@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# builds
+.next/
+out/
+dist/
+build/
+release/
+*.tsbuildinfo
+
+# runtime data
+siq/
+packages/
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# env
+.env
+.env.local
+.env*.local
+
+# caches
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.npm
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# generated from shared TypeScript
+common/**/*.js
+common/**/*.d.ts

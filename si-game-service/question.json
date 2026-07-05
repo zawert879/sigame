@@ -1,0 +1,660 @@
+{
+  "info": [
+      {
+          "comments": "Это комментарий к вопросу. Он будет показан на экране по окончании вопроса"
+      },
+      {
+          "comments": "Обратите внимание на длительность текста"
+      },
+      {
+          "comments": "Обратите внимание на длительность изображения"
+      },
+      {
+          "comments": "Необходимо вручную указывать длительность видео с учётом времени его прогрузки у игроков"
+      }
+  ],
+  "params": [
+      {
+          "param": {
+              "item": "Это текст вопроса",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Это вопрос со ставкой. На него отвечает тот, кто сделает самую большую ставку. Ва-банк (All-in) перекрывается только большим ва-банком",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": [
+              {
+                  "#text": "Новая тема",
+                  "attributes": {
+                      "name": "theme"
+                  }
+              },
+              {
+                  "numberSet": {
+                      "attributes": {
+                          "minimum": "2000",
+                          "maximum": "2000",
+                          "step": "0"
+                      }
+                  },
+                  "attributes": {
+                      "name": "price",
+                      "type": "numberSet"
+                  }
+              },
+              {
+                  "#text": "exceptCurrent",
+                  "attributes": {
+                      "name": "selectionMode"
+                  }
+              },
+              {
+                  "item": "(Супер)вопрос с секретом отдаётся любому игроку, и тот обязан на него отвечать. У него могут быть изменены тема и стоимость. Иногда его можно отдать себе. Тема и стоимость могут быть объявлены до или после отдачи",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "#text": "Новая тема",
+                  "attributes": {
+                      "name": "theme"
+                  }
+              },
+              {
+                  "numberSet": {
+                      "attributes": {
+                          "minimum": "0",
+                          "maximum": "0",
+                          "step": "0"
+                      }
+                  },
+                  "attributes": {
+                      "name": "price",
+                      "type": "numberSet"
+                  }
+              },
+              {
+                  "#text": "exceptCurrent",
+                  "attributes": {
+                      "name": "selectionMode"
+                  }
+              },
+              {
+                  "item": "Стоимость вопроса может выбираться получившим вопрос игроком. В данном вопросе задан выбор между минимальной и максимальной стоимостями вопросов в раунде",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "#text": "Новая тема",
+                  "attributes": {
+                      "name": "theme"
+                  }
+              },
+              {
+                  "numberSet": {
+                      "attributes": {
+                          "minimum": "100",
+                          "maximum": "1000",
+                          "step": "200"
+                      }
+                  },
+                  "attributes": {
+                      "name": "price",
+                      "type": "numberSet"
+                  }
+              },
+              {
+                  "#text": "any",
+                  "attributes": {
+                      "name": "selectionMode"
+                  }
+              },
+              {
+                  "item": "Указанная здесь стоимость позволяет выбирать числа от 100 до 1000 с шагом 200. То есть можно выбрать стоимость из вариантов: 100, 300, 500, 700, 900",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "#text": "Новая тема",
+                  "attributes": {
+                      "name": "theme"
+                  }
+              },
+              {
+                  "numberSet": {
+                      "attributes": {
+                          "minimum": "100",
+                          "maximum": "500",
+                          "step": "400"
+                      }
+                  },
+                  "attributes": {
+                      "name": "price",
+                      "type": "numberSet"
+                  }
+              },
+              {
+                  "#text": "exceptCurrent",
+                  "attributes": {
+                      "name": "selectionMode"
+                  }
+              },
+              {
+                  "item": "Здесь шаг пропущен. Поэтому выбирать в качестве допустимых значений можно только крайние числа: 100 или 500",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "numberSet": {
+                      "attributes": {
+                          "minimum": "700",
+                          "maximum": "700",
+                          "step": "0"
+                      }
+                  },
+                  "attributes": {
+                      "name": "price",
+                      "type": "numberSet"
+                  }
+              },
+              {
+                  "#text": "exceptCurrent",
+                  "attributes": {
+                      "name": "selectionMode"
+                  }
+              }
+          ]
+      },
+      {
+          "param": {
+              "item": "Вопрос задаётся открывшему его игроку. В случае успеха он заработает удвоенную стоимость вопроса, в случае неуспеха - не потеряет ничего",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Можно создать вопрос собственного типа. Но такой вопрос придётся разыгрывать в игре вручную, ставя игру на паузу (или используя Управляемый режим)",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Это обычный текст",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": [
+                  {
+                      "#text": "Это устный текст. Он появится в игре как реплика ведущего",
+                      "attributes": {
+                          "placement": "replic"
+                      }
+                  },
+                  {
+                      "#text": "А это второй фрагмент вопроса. Вопрос может состоять из нескольких фрагментов различных типов, следующих друг за другом. Можно указать длительность фрагмента в секундах (здесь - 8 секунд)",
+                      "attributes": {
+                          "duration": "00:00:08"
+                      }
+                  }
+              ],
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": [
+                  {
+                      "#text": "sample-boat-400x300.png",
+                      "attributes": {
+                          "type": "image",
+                          "isRef": "True"
+                      }
+                  },
+                  {
+                      "#text": "Устный комментарий для изображения",
+                      "attributes": {
+                          "placement": "replic"
+                      }
+                  }
+              ],
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": {
+                  "#text": "sample-3s.mp3",
+                  "attributes": {
+                      "type": "audio",
+                      "isRef": "True",
+                      "placement": "background"
+                  }
+              },
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": {
+                  "#text": "Big_Buck_Bunny_1080_10s_1MB.mp4",
+                  "attributes": {
+                      "type": "video",
+                      "isRef": "True"
+                  }
+              },
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": [
+                  {
+                      "#text": "Текст",
+                      "attributes": {
+                          "waitForFinish": "False"
+                      }
+                  },
+                  {
+                      "#text": "sample-3s.mp3",
+                      "attributes": {
+                          "type": "audio",
+                          "isRef": "True",
+                          "placement": "background"
+                      }
+                  }
+              ],
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": [
+                  {
+                      "#text": "sample-boat-400x300.png",
+                      "attributes": {
+                          "type": "image",
+                          "isRef": "True",
+                          "waitForFinish": "False"
+                      }
+                  },
+                  {
+                      "#text": "sample-3s.mp3",
+                      "attributes": {
+                          "type": "audio",
+                          "isRef": "True",
+                          "placement": "background"
+                      }
+                  }
+              ],
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": {
+                  "#text": "https://vladimirkhil.com/images/svoyak-soft.jpg",
+                  "attributes": {
+                      "type": "image"
+                  }
+              },
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": [
+              {
+                  "item": "А в этом вопросе медиа содержится в ответе",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              },
+              {
+                  "item": {
+                      "#text": "sample-boat-400x300.png",
+                      "attributes": {
+                          "type": "image",
+                          "isRef": "True"
+                      }
+                  },
+                  "attributes": {
+                      "name": "answer",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "item": "Вопрос с ответом в виде аудио",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              },
+              {
+                  "item": {
+                      "#text": "sample-3s.mp3",
+                      "attributes": {
+                          "type": "audio",
+                          "isRef": "True",
+                          "placement": "background"
+                      }
+                  },
+                  "attributes": {
+                      "name": "answer",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": [
+              {
+                  "item": "Вопрос с ответом в виде видео",
+                  "attributes": {
+                      "name": "question",
+                      "type": "content"
+                  }
+              },
+              {
+                  "item": {
+                      "#text": "Big_Buck_Bunny_1080_10s_1MB.mp4",
+                      "attributes": {
+                          "type": "video",
+                          "isRef": "True"
+                      }
+                  },
+                  "attributes": {
+                      "name": "answer",
+                      "type": "content"
+                  }
+              }
+          ]
+      },
+      {
+          "param": {
+              "item": {
+                  "#text": "https://www.youtube.com/embed/a3ICNMQW7Ok?controls=0&showinfo=0&autoplay=1&fs=0&disablekb=1",
+                  "attributes": {
+                      "type": "html",
+                      "duration": "00:00:35"
+                  }
+              },
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Вопрос финала 1",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Вопрос финала 2",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      },
+      {
+          "param": {
+              "item": "Вопрос финала 3",
+              "attributes": {
+                  "name": "question",
+                  "type": "content"
+              }
+          }
+      }
+  ],
+  "right": [
+      {
+          "answer": "А это правильный ответ"
+      },
+      {
+          "answer": [
+              "Ответ",
+              "Альтернативный ответ для зачёта человеком/компьютером"
+          ]
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": ""
+      },
+      {
+          "answer": "Ответ"
+      },
+      "",
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "А это обычный ответ"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "Изображение"
+      },
+      {
+          "answer": "Аудио"
+      },
+      {
+          "answer": "Видео"
+      },
+      {
+          "answer": "Текст + звук"
+      },
+      {
+          "answer": "Изображение + звук"
+      },
+      {
+          "answer": "Можно указать внешнюю ссылку для медиаконтента. Это уменьшит размер пакета, но потребует от игроков разрешить игре загружать контент из внешних источников (включаемая в настройках опция)"
+      },
+      {
+          "answer": "Текстовый ответ тоже стоит задать для проверки компьютером"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "Ответ"
+      },
+      {
+          "answer": "HTML контент (на примере YouTube)"
+      },
+      {
+          "answer": "Ответ финала 1"
+      },
+      {
+          "answer": "Ответ финала 2"
+      },
+      {
+          "answer": "Ответ финала 3"
+      }
+  ],
+  "attributes": [
+      {
+          "price": "100"
+      },
+      {
+          "price": "200",
+          "type": "stake"
+      },
+      {
+          "price": "300",
+          "type": "secret"
+      },
+      {
+          "price": "400",
+          "type": "secret"
+      },
+      {
+          "price": "500",
+          "type": "secret"
+      },
+      {
+          "price": "600",
+          "type": "secretPublicPrice"
+      },
+      {
+          "price": "700",
+          "type": "secretNoQuestion"
+      },
+      {
+          "price": "800",
+          "type": "noRisk"
+      },
+      {
+          "price": "-1"
+      },
+      {
+          "price": "900",
+          "type": "custom"
+      },
+      {
+          "price": "100"
+      },
+      {
+          "price": "200"
+      },
+      {
+          "price": "300"
+      },
+      {
+          "price": "400"
+      },
+      {
+          "price": "500"
+      },
+      {
+          "price": "600"
+      },
+      {
+          "price": "700"
+      },
+      {
+          "price": "800"
+      },
+      {
+          "price": "900"
+      },
+      {
+          "price": "1000"
+      },
+      {
+          "price": "1100"
+      },
+      {
+          "price": "1200"
+      },
+      {
+          "price": "0"
+      },
+      {
+          "price": "0"
+      },
+      {
+          "price": "0"
+      }
+  ],
+  "wrong": [
+      {
+          "answer": "Неправильная версия для незачёта/для бота"
+      }
+  ],
+  "type": [
+      {
+          "attributes": {
+              "name": ""
+          }
+      }
+  ]
+}

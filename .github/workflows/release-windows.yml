@@ -1,0 +1,61 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v1.0.0'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: |
+            si-game-admin-2/yarn.lock
+            si-game-service/yarn.lock
+
+      - name: Install frontend dependencies
+        working-directory: si-game-admin-2
+        run: yarn install --frozen-lockfile
+
+      - name: Install backend dependencies
+        working-directory: si-game-service
+        run: yarn install --frozen-lockfile
+
+      - name: Build exe
+        run: yarn package:win
+
+      - name: Resolve release tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release and upload exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: SI Game ${{ steps.release_tag.outputs.tag }}
+          files: release/sigame.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true

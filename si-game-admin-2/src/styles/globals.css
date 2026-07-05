@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@font-face {
+	font-family: 'Futura Condensed';
+	src: url('fonts/FuturaCondensedPlain.eot');
+	src: local('Futura Condensed Plain:001.004'), local('FuturaCondensedPlain'),
+		url('fonts/FuturaCondensedPlain.eot?#iefix') format('embedded-opentype'),
+		url('fonts/FuturaCondensedPlain.woff') format('woff'),
+		url('fonts/FuturaCondensedPlain.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: 'Futura_Condenced-Normal';
+	src: url('fonts/Futura_Condenced-Normal.eot');
+	src: local('Futura_Condenced-Normal'),
+		url('fonts/Futura_Condenced-Normal.eot?#iefix') format('embedded-opentype'),
+		url('fonts/Futura_Condenced-Normal.woff') format('woff'),
+		url('fonts/Futura_Condenced-Normal.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+body {
+  font-family: 'Futura_Condenced-Normal';
+}
