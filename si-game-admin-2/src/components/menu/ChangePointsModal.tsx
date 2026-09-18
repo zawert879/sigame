@@ -1,14 +1,28 @@
 import { client } from "@/client";
 import { ResponseGetSettings } from "@/types";
-import { Button, Flex, Modal, Slider, Space, Typography } from "antd/lib";
-import React, { memo, useCallback, useEffect, useState } from "react";
-import _ from "lodash";
+import { Button, Flex, Modal, Slider, Space, Typography } from "antd";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { InputNumber } from "../override/InputNumber";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { useGameStore } from "@/store/game";
+import { notifyError } from "@/utils/notify";
+
+const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
 // eslint-disable-next-line react/display-name
 export const ChangePointsModal: React.FC = memo(
   () => {
     const [data, setData] = useState<ResponseGetSettings>()
+    const dataRef = useRef<ResponseGetSettings>()
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // local copy for immediate feedback while the debounced request is pending
+    const updateData = useCallback((patch: Partial<ResponseGetSettings>) => {
+      if (dataRef.current) {
+        dataRef.current = { ...dataRef.current, ...patch }
+        setData(dataRef.current)
+      }
+    }, [])
 
     const showModal = useCallback(() => {
       setIsModalOpen(true);
@@ -19,8 +33,15 @@ export const ChangePointsModal: React.FC = memo(
     }, []);
 
     const fetch = useCallback(async () => {
-      const data = await client.getSettingsData()
-      setData(data)
+      try {
+        const settings = await client.getSettingsData()
+        dataRef.current = settings
+        setData(settings)
+        // quick score buttons and media volumes use the settings from the game store
+        useGameStore.getState().setSettings(settings)
+      } catch (error) {
+        notifyError(error, 'Не удалось загрузить настройки')
+      }
     }, [])
 
     useEffect(() => {
@@ -29,32 +50,56 @@ export const ChangePointsModal: React.FC = memo(
       }
     }, [fetch, isModalOpen])
 
-    const setLittle = useCallback(async (value: number | null) => {
-      if (value) {
-        await client.setScoreLittle(value)
-        fetch()
+    const save = useCallback(async (request: () => Promise<void>) => {
+      try {
+        await request()
+        if (dataRef.current) {
+          useGameStore.getState().setSettings(dataRef.current)
+        }
+      } catch (error) {
+        notifyError(error, 'Не удалось сохранить настройки')
+        // show what the server actually has
+        await fetch()
       }
     }, [fetch])
 
-    const setBig = useCallback(async (value: number | null) => {
-      if (value) {
-        await client.setScoreBig(value)
-        fetch()
+    const sendLittle = useDebouncedCallback((value: number) => save(() => client.setScoreLittle(value)), 150)
+    const sendBig = useDebouncedCallback((value: number) => save(() => client.setScoreBig(value)), 150)
+    // both volumes are sent together: take the latest values of the local copy
+    const sendVolumes = useDebouncedCallback(() => {
+      const current = dataRef.current
+      if (current) {
+        return save(() => client.setVolumeSettings(current.playerVolume, current.adminVolume))
       }
-    }, [fetch])
-  
-    const setPlayerVolume = useCallback(async (value: number | null) => {
-      if (value) {
-        await client.setVolumeSettings(value, data!.adminVolume)
-        fetch()
+    }, 150)
+
+    const setLittle = useCallback((value: number | string | null) => {
+      if (isNumber(value)) {
+        updateData({ little: value })
+        sendLittle(value)
       }
-    }, [fetch, data])
-    const setAdminVolume = useCallback(async (value: number | null) => {
-      if (value) {
-        await client.setVolumeSettings(data!.playerVolume, value)
-        fetch()
+    }, [sendLittle, updateData])
+
+    const setBig = useCallback((value: number | string | null) => {
+      if (isNumber(value)) {
+        updateData({ big: value })
+        sendBig(value)
       }
-    }, [fetch, data])
+    }, [sendBig, updateData])
+
+    const setPlayerVolume = useCallback((value: number) => {
+      if (isNumber(value) && dataRef.current) {
+        updateData({ playerVolume: value })
+        sendVolumes()
+      }
+    }, [sendVolumes, updateData])
+
+    const setAdminVolume = useCallback((value: number) => {
+      if (isNumber(value) && dataRef.current) {
+        updateData({ adminVolume: value })
+        sendVolumes()
+      }
+    }, [sendVolumes, updateData])
 
     return (
       <>
@@ -62,7 +107,7 @@ export const ChangePointsModal: React.FC = memo(
           Настройки
         </Button>
         <Modal
-          title="Настройка быстрых очков"
+          title="Настройки"
           open={isModalOpen}
           onCancel={handleCancel}
           footer={[
@@ -77,16 +122,18 @@ export const ChangePointsModal: React.FC = memo(
               <span className="mr-2 w-32 flex items-center"> Маленький</span>
               <InputNumber
                 className="!w-full"
+                min={0}
                 value={data?.little}
-                onChange={_.debounce(setLittle, 150) as any}
+                onChange={setLittle}
               />
             </Space.Compact>
             <Space.Compact>
               <span className="mr-2 w-32 flex items-center"> Большой</span>
               <InputNumber
                 className="!w-full"
+                min={0}
                 value={data?.big}
-                onChange={_.debounce(setBig, 150) as any}
+                onChange={setBig}
               />
             </Space.Compact>
           </Flex>
@@ -95,18 +142,22 @@ export const ChangePointsModal: React.FC = memo(
             <Space.Compact>
               <span className="mr-2 w-32 flex items-center"> Плеер</span>
               <Slider
+                className="grow"
                 min={0}
                 max={100}
-                onChange={_.debounce(setPlayerVolume, 150) as any}
+                disabled={!data}
+                onChange={setPlayerVolume}
                 value={typeof data?.playerVolume === 'number' ? data.playerVolume : 0}
               />
             </Space.Compact>
             <Space.Compact>
               <span className="mr-2 w-32 flex items-center"> Админ</span>
               <Slider
+                className="grow"
                 min={0}
                 max={100}
-                onChange={_.debounce(setAdminVolume, 150) as any}
+                disabled={!data}
+                onChange={setAdminVolume}
                 value={typeof data?.adminVolume === 'number' ? data.adminVolume : 0}
               />
             </Space.Compact>

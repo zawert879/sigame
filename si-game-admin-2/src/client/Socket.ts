@@ -1,7 +1,8 @@
 import type * as SocketIO from 'socket.io-client'
-import { Event, SystemEvent } from '../data'
 import { type Dao } from '../types'
-import bind from 'bind-decorator'
+import { ClientErrorCode, RequestError, isAckError } from './errors'
+
+export const DEFAULT_REQUEST_TIMEOUT = 15_000
 
 export class Socket {
   constructor(private readonly socket: SocketIO.Socket) {
@@ -15,10 +16,21 @@ export class Socket {
     return this.socket
   }
 
-  public async send<T>(dao: Dao): Promise<T> {
-    return this.socket.emitWithAck(dao.type, dao.payload)
+  public get connected() {
+    return this.socket.connected
   }
-  public async handshake() {
-    return this.socket.emit(SystemEvent.Handshake, '4324234')
+
+  // Sends a request and waits for its ack. Rejects with RequestError on an AckError response or on timeout.
+  public async send<T>(dao: Dao, timeoutMs: number = DEFAULT_REQUEST_TIMEOUT): Promise<T> {
+    let response: unknown
+    try {
+      response = await this.socket.timeout(timeoutMs).emitWithAck(dao.type, dao.payload)
+    } catch {
+      throw new RequestError(this.socket.connected ? ClientErrorCode.Timeout : ClientErrorCode.Disconnected)
+    }
+    if (isAckError(response)) {
+      throw RequestError.fromAck(response)
+    }
+    return response as T
   }
 }

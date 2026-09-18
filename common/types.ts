@@ -1,4 +1,4 @@
-import type { CostType, Event, QuestionAnswerType, QuestionType, RoundType, Screen, SelectionModeType } from '@common/data'
+import type { AckErrorCode, CostType, Event, QuestionAnswerType, QuestionType, RoundType, Screen, SelectionModeType } from './data'
 
 export type Dao = {
   type: Event.SelectPack;
@@ -132,6 +132,19 @@ export type Dao = {
 } | {
   type: Event.SetVolumeSettings;
   payload: RequestSetVolumeSettings;
+} | {
+  type: Event.RepeatQuestion;
+  payload: RequestVoid;
+} | {
+  type: Event.CancelQuestion;
+  payload: RequestVoid;
+}
+
+// Every socket request is acknowledged. On failure the ack payload is an AckError
+// instead of the typed response; the client rejects the request promise with it.
+export type AckError = {
+  error: AckErrorCode;
+  message?: string;
 }
 
 export type RequestWinPlayer = {
@@ -228,6 +241,7 @@ export type ResponseGetGame = {
   score: number;
   scoreBig: number;
   scoreLittle: number;
+  progress: GameProgress;
   screenData: {
     screen: Screen.Screensaver;
     payload: PayloadStartScreensaver;
@@ -247,9 +261,20 @@ export type ResponseGetGame = {
     payload: PayloadStartThemeListInRound;
     screen: Screen.ThemeListInRound;
   } | {
+    payload: PayloadStartResults;
+    screen: Screen.Results;
+  } | {
     screen: Screen.Initial;
     payload: PayloadInitial;
   };
+}
+
+// Game progress for the admin panel. roundIndex is 0-based; counters refer to the current round.
+export type GameProgress = {
+  roundIndex: number;
+  roundsCount: number;
+  questionsPlayed: number;
+  questionsTotal: number;
 }
 
 export type RequestSelectGame = {
@@ -269,6 +294,16 @@ export type RequestUpdatePlayer = {
 export type RequestVoid = {}
 export type ResponseVoid = {}
 export type ResponseGetPlayers = Player[]
+
+// REST: GET /api/packs — the .siq files of the server
+export type PackInfo = {
+  // name from content.xml; the file name without '.siq' when the pack has none; '' when isBroken
+  name: string;
+  file: string;
+  // content.xml could not be read: the pack cannot be played, only deleted
+  isBroken: boolean;
+}
+export type ResponseGetPacks = PackInfo[]
 
 export type Player = {
   id: string;
@@ -314,6 +349,9 @@ export type EventUpdateQuestionPage = {
 export type PayloadQuestionPage = {
   currentPage: PageSnapshotType | null;
   nextPage: PageSnapshotType | null;
+  // 0-based index of currentPage and total number of pages of the question (0 when it has no pages)
+  pageIndex: number;
+  pagesCount: number;
 }
 export type EventUpdateScoreValue = {
   scoreValue: number;
@@ -333,7 +371,10 @@ export type PayloadStartQuestion = {
   comments: string | null;
   currentPage: PageSnapshotType | null;
   nextPage: PageSnapshotType | null;
-  isClose: boolean;
+  pageIndex: number;
+  pagesCount: number;
+  // true while the question has not been played yet (it is still selectable in the table)
+  isAvailable: boolean;
   price: number;
   rightAnswer: string[] | null;
   selectPrice: { minimum: number; maximum: number; step: number; type: CostType } | null;
@@ -347,6 +388,7 @@ export type PayloadStartQuestion = {
 }
 export type PayloadStartRoundName = {
   name: string;
+  progress: GameProgress;
 }
 export type PayloadStartTable = {
   type: RoundType;
@@ -354,11 +396,12 @@ export type PayloadStartTable = {
     name: string;
     questions: Array<{
       id: string;
-      isClose: boolean;
+      isAvailable: boolean;
       price: number;
     }>;
   }>;
   currentSelector: string | null;
+  progress: GameProgress;
 }
 export type PayloadStartThemeList = {
   themes: string[];
@@ -368,6 +411,9 @@ export type PayloadStartThemeListInRound = {
 }
 export type PayloadStartResults = {
   players: Player[];
+  // results after the last round of the pack: the game is over
+  isLastRound: boolean;
+  progress: GameProgress;
 }
 
 export type PageSnapshotType = {

@@ -6,6 +6,3 @@ export const router = new Router({ prefix: '/api' })
 
 router.use('/upload', uploadRouter)
 router.use('/packs', packsRouter)
-router.get('/fatal', async (ctx) => {
-  process.exit(1)
-})

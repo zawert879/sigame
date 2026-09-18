@@ -5,6 +5,14 @@ export function timeout(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Question page text. The pack parser may deliver numbers, and the Futura font has no "ё" glyph.
+export const formatPageText = (text: unknown): string => {
+  if (text === null || text === undefined) {
+    return ''
+  }
+  return String(text).replace(/ё/g, 'е').replace(/Ё/g, 'Е')
+}
+
 export const costToString = (data: { minimum: number; maximum: number; step: number; type: CostType }): string => {
   if(data.type === CostType.ACCURATE){
     return `${data.minimum || data.maximum}`

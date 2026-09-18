@@ -1,0 +1,62 @@
+name: Checks
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: |
+            si-game-service/yarn.lock
+            si-game-admin-2/yarn.lock
+
+      - name: Install dependencies
+        id: install
+        run: |
+          yarn --cwd si-game-service install --frozen-lockfile
+          yarn --cwd si-game-admin-2 install --frozen-lockfile
+      - name: Service — typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: si-game-service
+        run: yarn typecheck
+
+      - name: Service — lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: si-game-service
+        run: yarn lint
+
+      - name: Service — tests
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: si-game-service
+        run: yarn test
+
+      - name: Admin — typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: si-game-admin-2
+        run: yarn typecheck
+
+      - name: Admin — lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: si-game-admin-2
+        run: yarn lint
+      - name: Build
+        id: build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: yarn build
+      - name: Smoke-test the built app
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: yarn smoke

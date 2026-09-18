@@ -1,6 +1,6 @@
 import { RoundType } from '../data'
 import { type SIQ } from '../serverTypes'
-import { type GameContainer } from '../types'
+import { textOf, toArray } from '../utils/siqValue'
 import { Theme } from './Theme'
 import type { Question } from './Question'
 
@@ -12,21 +12,27 @@ export class Round {
   readonly comments: string | null
   readonly questionById = new Map<string, Question>()
 
-  constructor(round: SIQ.Content.Package.Round, gameContainer: GameContainer) {
-    this.comments = round.info ? round.info.comments : null
-    this.sources = round.info ? round.info.sources?.source ?? null : null
-    this.name = round.attributes.name
-    this.themes = Array.isArray(round.themes.theme)
-      ? round.themes.theme.map(theme => new Theme(theme, gameContainer))
-      : [new Theme(round.themes.theme, gameContainer)]
-    this.type = round.attributes.type
-      ? round.attributes.type
-      : RoundType.DEFAULT
+  constructor(round: SIQ.Content.Package.Round) {
+    this.comments = textOf(round.info?.comments)
+    this.sources = textOf(round.info?.sources?.source)
+    this.name = textOf(round.attributes?.name) ?? ''
+    this.type = round.attributes?.type === RoundType.FINAL ? RoundType.FINAL : RoundType.DEFAULT
+    this.themes = toArray(round.themes?.theme)
+      .filter(theme => typeof theme === 'object' && theme !== null)
+      .map(theme => new Theme(theme))
 
     for (const theme of this.themes) {
       for (const question of theme.questions) {
         this.questionById.set(question.id, question)
       }
     }
+  }
+
+  public get questions(): Question[] {
+    return [...this.questionById.values()]
+  }
+
+  public get hasAvailableQuestions(): boolean {
+    return this.questions.some(question => question.isAvailable)
   }
 }

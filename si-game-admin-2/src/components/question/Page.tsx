@@ -1,22 +1,23 @@
-import { FC } from "react";
+import { FC, ReactNode } from "react";
 import { PageSnapshotType } from "@/types";
-import { QuestionVideo } from "./QuestionVideo";
-import { QuestionAudio } from "./QuestionAudio";
 import MediaPlayer, { MediaPlayerType } from "../MediaPlayer";
-import { getGameIdFromPath } from "@/utils/route";
+import { HtmlContent } from "./HtmlContent";
+import { useGameStore } from "@/store/game";
+import { mediaUrl } from "@/utils/api";
+import { formatPageText } from "@/utils/utils";
 
+// A question page on the player screen (TV).
 export const Page: FC<{
   page: PageSnapshotType
-  isPreview?: boolean;
-  isAdmin?: boolean;
-}> = ({ page, isAdmin, isPreview }) => {
-  const gameId = getGameIdFromPath()
-  const elements = []
+}> = ({ page }) => {
+  const gameId = useGameStore(state => state.gameId)
+  const elements: ReactNode[] = []
+  const text = formatPageText(page.text)
 
-  if (page.text) {
+  if (text) {
     elements.push(
       <div key='text' className="grow flex justify-center items-center">
-        <span>{page.text?.replace('ё', 'e')}</span>
+        <span>{text}</span>
       </div>
     )
   }
@@ -25,7 +26,7 @@ export const Page: FC<{
     elements.push(
       <picture key='image' className="w-full h-full">
         <img
-          src={/^https?:\/\//.test(page.image) ? page.image : `/api/files/${gameId}/Images/${page.image}`}
+          src={mediaUrl(gameId, 'Images', page.image)}
           alt="image"
           className="w-full h-full object-contain"
         />
@@ -34,45 +35,32 @@ export const Page: FC<{
   }
   if (page.video) {
     elements.push(
-      // <QuestionVideo
-      //   key='video'
-      //   url={/^https?:\/\//.test(page.video) ? page.video : `/api/files/${gameId}/Video/${page.video}`}
-      //   isPreview={isPreview ?? false}
-      //   isAdminButtons={isAdmin ?? false}
-      // />
       <MediaPlayer
         key="video"
-        url={
-          /^https?:\/\//.test(page.video)
-            ? page.video
-            : `/api/files/${gameId}/Video/${page.video}`
-        }
+        url={mediaUrl(gameId, 'Video', page.video)}
         type={MediaPlayerType.Player}
       />
     );
   }
   if (page.voice) {
     elements.push(
-      <div>
-        <img src="/music_note.svg" alt="MUSIC" className="h-16 animate-rotateText" />
+      <div key="voice">
+        <picture>
+          <img src="/music_note.svg" alt="MUSIC" className="h-16 animate-rotateText" />
+        </picture>
         <MediaPlayer
-          key="video"
-          url={
-            /^https?:\/\//.test(page.voice) ? page.voice : `/api/files/${gameId}/Audio/${page.voice}`
-          }
+          url={mediaUrl(gameId, 'Audio', page.voice)}
           type={MediaPlayerType.Player}
         />
       </div>
-      // <QuestionAudio
-      //   key='audio'
-      //   url={/^https?:\/\//.test(page.voice) ? page.voice : `/api/files/${gameId}/Video/${page.voice}`}
-      //   isPreview={isPreview}
-      //   isAdmin={isAdmin}
-      // />
     );
   }
-  if (elements.length > 0) {
-    return elements
+  if (page.html) {
+    elements.push(
+      <div key="html" className="w-full h-full">
+        <HtmlContent html={page.html} />
+      </div>
+    );
   }
-  return <div className="text-3xl">HTML не поддерживается</div>;
+  return <>{elements}</>
 };

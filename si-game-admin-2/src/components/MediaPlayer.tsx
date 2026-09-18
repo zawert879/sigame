@@ -7,17 +7,17 @@ import {
   MediaControlBar,
   MediaTimeRange,
   MediaTimeDisplay,
-  MediaVolumeRange,
   MediaPlayButton,
   MediaSeekBackwardButton,
   MediaSeekForwardButton,
-  MediaMuteButton,
 } from "media-chrome/react";
-import { PlayCircleOutlined } from "@ant-design/icons/lib";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import ReactPlayer from "react-player";
 import { client } from "@/client";
 import { eventEmitter } from "@/eventEmitter";
 import { EventUpdateMediaPlayer } from "@/types";
+import { toMediaVolume, useGameStore } from "@/store/game";
+import { notifyError } from "@/utils/notify";
 
 export enum MediaPlayerType {
   Admin = "admin",
@@ -30,11 +30,20 @@ const MediaPlayer: FC<{
   // eslint-disable-next-line react/display-name
 }> = memo(({ url, type }) => {
   const mediaRef = useRef<HTMLVideoElement>(null);
+  // volumes from the game settings (0..100): the player screen and the host device are set separately
+  const volume = useGameStore((state) =>
+    toMediaVolume(type === MediaPlayerType.Admin ? state.settings?.adminVolume : state.settings?.playerVolume)
+  );
   const updateMediaPlayer = useCallback((data: EventUpdateMediaPlayer) => {
-    if(mediaRef.current){
-      console.log(data)
-      data.isPlaying ? mediaRef.current.play() : mediaRef.current.pause()
-      mediaRef.current.currentTime = data.time
+    const media = mediaRef.current
+    if (media) {
+      if (data.isPlaying) {
+        // autoplay may be blocked by the browser until the page gets a user gesture
+        media.play()?.catch(() => undefined)
+      } else {
+        media.pause()
+      }
+      media.currentTime = data.time
     }
   }, [mediaRef])
 
@@ -51,7 +60,11 @@ const MediaPlayer: FC<{
       time: mediaRef.current.currentTime,
       isPlaying: !mediaRef.current.paused,
     };
-    await client.updateMediaPlayer(state)
+    try {
+      await client.updateMediaPlayer(state)
+    } catch (error) {
+      notifyError(error, 'Не удалось синхронизировать плеер')
+    }
   }, [mediaRef])
 
   const handlePlayPause = useCallback(() => {
@@ -73,6 +86,7 @@ const MediaPlayer: FC<{
           ref={mediaRef}
           slot="media"
           src={url}
+          volume={volume}
           controls={false}
           onClick={() => { }}
           style={{
@@ -120,6 +134,7 @@ const MediaPlayer: FC<{
         ref={mediaRef}
         slot="media"
         src={url}
+        volume={volume}
         disablePictureInPicture
         config={{
           //@ts-ignore
@@ -141,9 +156,6 @@ const MediaPlayer: FC<{
         }}
       ></ReactPlayer>
       <MediaControlBar className="flex items-center  p-2">
-        {/* <MediaVolumeRange className="h-4" /> */}
-        {/* <MediaMuteButton className="w-12 h-12 text-2xl" /> */}
-
         <MediaTimeDisplay showDuration className="text-lg" />
 
         <MediaSeekBackwardButton

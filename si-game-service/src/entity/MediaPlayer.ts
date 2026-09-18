@@ -34,8 +34,10 @@ export class MediaPlayer {
     this._eventEmitter.emit(GameEvent.UpdateMediaPlayer, { time: this._time, isPlaying: this._isPlaying })
   }
 
-  public reset() {
-    if (!this._isPlaying && this._time === 0) {
+  // Back to the start and playing. Emits only when something changes, unless `force` is set
+  // (clients may have advanced the media without reporting it).
+  public reset(force = false) {
+    if (!force && this._isPlaying && this._time === 0) {
       return
     }
 

@@ -1,16 +1,31 @@
-import { Button, Space } from "antd/lib";
-import _ from "lodash";
-import { ChangeEvent, FC, useCallback } from "react";
+import { Button, Space } from "antd";
+import { ChangeEvent, FC, KeyboardEvent, useCallback } from "react";
 import { Input } from "../override/Input";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 
-export const PlayerInSetting: FC<{ onDelete: () => void; onChangeName: (name: string) => void, name: string }> = ({ onDelete, onChangeName, name }) => {
+export const PlayerInSetting: FC<{
+  onDelete: () => void;
+  onChangeName: (name: string) => void;
+  onChangeKey: (code: string) => void;
+  name: string;
+  keyboardKey: string;
+}> = ({ onDelete, onChangeName, onChangeKey, name, keyboardKey }) => {
+  const changeName = useDebouncedCallback(onChangeName, 450)
   const handleChangeName = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    onChangeName(event.target.value)
-  }, [onChangeName])
+    changeName(event.target.value)
+  }, [changeName])
+  // the player's button is the next key pressed in this field
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Tab') {
+      return
+    }
+    event.preventDefault()
+    onChangeKey(event.code)
+  }, [onChangeKey])
   return (
     <Space.Compact>
-      <Input placeholder="Имя" defaultValue={name} onChange={_.debounce(handleChangeName,450)} />
-      <Input placeholder="Кнопка" />
+      <Input placeholder="Имя" defaultValue={name} onChange={handleChangeName} />
+      <Input placeholder="Кнопка" value={keyboardKey} onKeyDown={handleKeyDown} readOnly />
       <Button type="primary" danger onClick={onDelete}>
         Удалить
       </Button>

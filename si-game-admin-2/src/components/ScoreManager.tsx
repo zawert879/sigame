@@ -1,40 +1,34 @@
 import { client } from "@/client"
-import { Button, Space } from "antd/lib"
-import { FC, useCallback, useEffect, useState } from "react"
-import * as Data from "@/data"
-import { EventUpdateScoreValue } from "@/types"
-import _ from 'lodash'
+import { Button, Space } from "antd"
+import { FC, useCallback } from "react"
 import { InputNumber } from "./override/InputNumber"
+import { useGameStore } from "@/store/game"
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback"
+import { notifyError } from "@/utils/notify"
 
-export const ScoreManager: FC<{ defaultScore: number, big: number, little: number }> = ({ defaultScore, big, little }) => {
-  const [scoreValue, setScoreValue] = useState(defaultScore)
-  const onUpdateScoreValue = useCallback((data: EventUpdateScoreValue) => {
-    setScoreValue(data.scoreValue);
-  }, [])
+// Price of the current question: quick +/- buttons (small / big step) and manual input.
+export const ScoreManager: FC = () => {
+  const scoreValue = useGameStore(state => state.scoreValue)
+  const big = useGameStore(state => state.meta?.scoreBig ?? 0)
+  const little = useGameStore(state => state.meta?.scoreLittle ?? 0)
 
-  useEffect(() => {
-    client.socket.socketIo.on(Data.Event.OnUpdateScoreValue, onUpdateScoreValue)
-
-    return () => {
-      client.socket.socketIo.off(Data.Event.OnUpdateScoreValue, onUpdateScoreValue)
+  const run = useCallback(async (request: () => Promise<void>) => {
+    try {
+      await request()
+    } catch (error) {
+      notifyError(error, 'Не удалось изменить цену вопроса')
     }
-  }, [onUpdateScoreValue])
+  }, [])
 
-  const onBigPlus = useCallback(async () => {
-    await client.submitScoreBigPlus()
-  }, [])
-  const onBigMinus = useCallback(async () => {
-    await client.submitScoreBigMinus()
-  }, [])
-  const onLittlePlus = useCallback(async () => {
-    await client.submitScoreLittlePlus()
-  }, [])
-  const onLittleMinus = useCallback(async () => {
-    await client.submitScoreLittleMinus()
-  }, [])
-  const onChange = useCallback(async (value: any) => {
-    await client.setScoreValue(value)
-  }, [])
+  const onBigPlus = useCallback(() => run(() => client.submitScoreBigPlus()), [run])
+  const onBigMinus = useCallback(() => run(() => client.submitScoreBigMinus()), [run])
+  const onLittlePlus = useCallback(() => run(() => client.submitScoreLittlePlus()), [run])
+  const onLittleMinus = useCallback(() => run(() => client.submitScoreLittleMinus()), [run])
+  const onChange = useDebouncedCallback((value: number | string | null) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return run(() => client.setScoreValue(value))
+    }
+  }, 450)
 
   return (
     <>
@@ -59,7 +53,7 @@ export const ScoreManager: FC<{ defaultScore: number, big: number, little: numbe
           value={scoreValue}
           size="large"
           className="!w-full"
-          onChange={_.debounce(onChange, 450)}
+          onChange={onChange}
         />
         <Button
           type="primary"

@@ -1,33 +1,32 @@
 import { create } from "zustand"
-import { devtools } from "zustand/middleware"
-interface Pack {
+import { apiFetch } from "@/utils/api"
+
+export interface Pack {
+  // '' when the server could not read the pack's content.xml (it can still be deleted)
   name: string
   file: string
 }
 
-interface RewardState {
+interface PacksState {
   packs: Pack[]
 
   fetchPacks: () => Promise<void>
-  removePacks: (path: string) => Promise<void>
+  removePack: (file: string) => Promise<void>
 }
 
-const usePacksStore = create<RewardState>()(
-  devtools((set,get) => ({
-    packs: [],
-    fetchPacks: async () => {
-      const response = await fetch('/api/packs')
-      set({
-        packs: await response.json()
-      })
-    },
-    removePacks: async (path) => {
-      await fetch((`/api/packs/?file=${path}`),{
-        method: 'DELETE',
-      })
-      get().fetchPacks()
-    }
-  }))
-)
+const usePacksStore = create<PacksState>()((set, get) => ({
+  packs: [],
+  fetchPacks: async () => {
+    const response = await apiFetch('/api/packs')
+    const packs: unknown = await response.json()
+    set({
+      packs: Array.isArray(packs) ? packs : [],
+    })
+  },
+  removePack: async (file) => {
+    await apiFetch(`/api/packs?file=${encodeURIComponent(file)}`, { method: 'DELETE' }, { admin: true })
+    await get().fetchPacks()
+  },
+}))
 
 export default usePacksStore

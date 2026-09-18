@@ -1,17 +1,31 @@
 import EventEmitter from 'eventemitter3'
-import { parseSIQ } from '../utils/parseSIQ'
-import { Player } from './Player'
-import { SiqPackage } from './SiqPackage'
+import fs from 'fs/promises'
+import path from 'path'
 import { v4 as uuid } from 'uuid'
-import { Question } from './Question'
-import bind from 'bind-decorator'
+import { QuestionType, RoundType, Screen, siqDir } from '../data'
 import { GameEvent } from '../events'
-import { EventUpdateMediaPlayer, EventUpdatePlayers, Player as PlayerType } from '../types'
-import { QuestionType, RoundType, Screen } from '../data'
-import { Score } from './Score'
-import { QueuePlayers } from './QueuePlayers'
+import type {
+  EventUpdateMediaPlayer,
+  EventUpdatePlayers,
+  GameProgress,
+  PayloadQuestionPage,
+  PayloadStartQuestion,
+  PayloadStartResults,
+  PayloadStartTable,
+  Player as PlayerType,
+  ResponseGetGame,
+  ResponseGetSettings,
+} from '../types'
+import { gameMediaDir, RM_OPTIONS } from '../utils/packages'
+import { parseSIQ } from '../utils/parseSIQ'
 import { MediaPlayer } from './MediaPlayer'
+import { GameError } from './GameError'
+import { Player } from './Player'
+import type { Question } from './Question'
+import { QueuePlayers } from './QueuePlayers'
+import { Score } from './Score'
 import { Settings } from './Settings'
+import { SiqPackage } from './SiqPackage'
 
 export type Events = {
   [GameEvent.UpdatePlayers]: (event: EventUpdatePlayers) => void;
@@ -30,22 +44,63 @@ export type Events = {
   [GameEvent.UpdateMediaPlayer]: (event: EventUpdateMediaPlayer) => void;
 }
 
+export type GameListeners = Partial<Events>
+
+export type ScreenData = ResponseGetGame['screenData']
+
+// event emitted when the game switches to a screen
+const screenEvents: Record<Screen, GameEvent | null> = {
+  [Screen.Initial]: null,
+  [Screen.Screensaver]: GameEvent.StartScreensaver,
+  [Screen.ThemeList]: GameEvent.StartThemeList,
+  [Screen.RoundName]: GameEvent.StartRoundName,
+  [Screen.ThemeListInRound]: GameEvent.StartThemeListInRound,
+  [Screen.Table]: GameEvent.StartTable,
+  [Screen.QuestionPreparation]: GameEvent.StartQuestionPreparation,
+  [Screen.Question]: GameEvent.StartQuestion,
+  [Screen.Results]: GameEvent.StartResults,
+}
+
+// Screen flow (next):
+// Initial ─selectPack→ Screensaver → ThemeList → RoundName → ThemeListInRound → Table
+// Table ─selectQuestion→ [QuestionPreparation →] Question → …pages… → Table | Results (round is over)
+// Results → RoundName of the next round; on the last round Results is final.
 export class Game {
   readonly id: string
-  private _eventEmitter = new EventEmitter()
-  private _package: SiqPackage | null
-  private _score: Score
+  private readonly _eventEmitter = new EventEmitter()
+  private _package: SiqPackage | null = null
+  private readonly _score: Score
   private _currentSelector: string | null = null
-  private _settings: Settings
-  private _queuePlayers: QueuePlayers
-  private _mediaPlayer: MediaPlayer = new MediaPlayer(this._eventEmitter)
+  private readonly _settings: Settings
+  private readonly _queuePlayers: QueuePlayers
+  private readonly _mediaPlayer: MediaPlayer
   private _screen: Screen = Screen.Initial
-  private _name: string
-  private _isStartPack = true
+  private readonly _name: string
   private _isButtonsActive = false
+  private _isLoadingPack = false
+  private _isClosed = false
+  private readonly _players = new Map<string, Player>()
+
+  constructor(name: string) {
+    this.id = uuid()
+    this._name = name
+
+    const gameContainer = {
+      eventEmitter: this._eventEmitter,
+      id: this.id,
+    }
+    this._score = new Score(gameContainer)
+    this._settings = new Settings()
+    this._queuePlayers = new QueuePlayers(gameContainer)
+    this._mediaPlayer = new MediaPlayer(this._eventEmitter)
+  }
 
   public get package(): SiqPackage | null {
     return this._package
+  }
+
+  public get packageName(): string | null {
+    return this._package?.name ?? null
   }
 
   public get mediaPlayer(): MediaPlayer {
@@ -72,51 +127,49 @@ export class Game {
     return this._settings
   }
 
-  private _players = new Map<string, Player>()
+  public get isButtonsActive(): boolean {
+    return this._isButtonsActive
+  }
+
+  public get isClosed(): boolean {
+    return this._isClosed
+  }
+
   public get players(): Player[] {
     return [...this._players.values()]
   }
 
   public get playersWithQueue(): PlayerType[] {
-    const result = []
-    for (const player of this._players.values()) {
-      const playerInQueue = this._queuePlayers.getPlayer(player.id)
-      result.push({
-        id: player.id,
-        name: player.name,
-        keyboardKey: player.keyboardKey,
-        score: player.score,
-        win: player.winCount,
-        lose: player.loseCount,
-        queue: playerInQueue,
-      })
-    }
-
-    return result
+    return this.players.map(player => this.playerData(player))
   }
 
   public get queuePlayersIds(): string[] {
     return this._queuePlayers.queue
   }
 
-  constructor(name: string) {
-    this.id = uuid()
-    this._package = null
-    this._name = name
+  // directory with the extracted media of the current pack
+  public get packDir(): string {
+    return gameMediaDir(this.id)
+  }
 
-    this.sub()
-    const gameContainer = {
-      eventEmitter: this._eventEmitter,
-      id: this.id,
+  public get progress(): GameProgress {
+    return this._package?.progress ?? {
+      roundIndex: 0,
+      roundsCount: 0,
+      questionsPlayed: 0,
+      questionsTotal: 0,
     }
-    this._score = new Score(gameContainer)
-    this._settings = new Settings()
-    this._queuePlayers = new QueuePlayers(gameContainer)
   }
 
   public closeGame() {
-    this.unSub()
+    if (this._isClosed) {
+      return
+    }
+
+    this._isClosed = true
+    this._package?.close()
     this._eventEmitter.emit(GameEvent.Exit)
+    this._eventEmitter.removeAllListeners()
   }
 
   public on<T extends EventEmitter.EventNames<Events>>(
@@ -124,9 +177,6 @@ export class Game {
     listener: EventEmitter.EventListener<Events, T>,
   ): this {
     this._eventEmitter.on(event, listener)
-
-    // console.log('listenerCount ON: ', event, this._eventEmitter.listenerCount(event))
-
     return this
   }
 
@@ -135,57 +185,198 @@ export class Game {
     listener: EventEmitter.EventListener<Events, T>,
   ): this {
     this._eventEmitter.off(event, listener)
-    // console.log('listenerCount OFF : ', event, this._eventEmitter.listenerCount(event))
-
     return this
   }
 
+  public subscribe(listeners: GameListeners): void {
+    for (const [event, listener] of Object.entries(listeners)) {
+      this._eventEmitter.on(event, listener as (...args: unknown[]) => void)
+    }
+  }
+
+  public unsubscribe(listeners: GameListeners): void {
+    for (const [event, listener] of Object.entries(listeners)) {
+      this._eventEmitter.off(event, listener as (...args: unknown[]) => void)
+    }
+  }
+
+  // ---- pack ----
+
+  // file is a pack name inside siqDir
+  public async startGame(file: string): Promise<void> {
+    await this.loadPack(path.join(siqDir, file))
+  }
+
+  // Parses the pack, extracts its media into packages/<gameId> and only then switches to the Screensaver.
+  // Players and their scores are kept; everything else about the previous pack is reset.
+  public async loadPack(filePath: string): Promise<void> {
+    if (this._isClosed) {
+      throw new GameError('Игра уже закрыта')
+    }
+
+    if (this._isLoadingPack) {
+      throw new GameError('Пак уже загружается, подождите')
+    }
+
+    this._isLoadingPack = true
+    try {
+      const siq = parseSIQ(filePath)
+      const siqPackage = new SiqPackage(siq)
+
+      await fs.rm(this.packDir, RM_OPTIONS)
+      await SiqPackage.saveAssets(siq, this.packDir)
+
+      if (this._isClosed) {
+        // the game was closed while the media were being written
+        await fs.rm(this.packDir, RM_OPTIONS)
+        throw new GameError('Игра уже закрыта')
+      }
+
+      this._package?.close()
+      this._package = siqPackage
+      this._isButtonsActive = false
+      this._queuePlayers.clear()
+      this._mediaPlayer.reset()
+      this._score.setValue(0)
+      this.setCurrentSelector(null)
+      this.setScreen(Screen.Screensaver)
+    } finally {
+      this._isLoadingPack = false
+    }
+  }
+
+  // ---- screens ----
+
   public next(): void {
-    if (this._screen === Screen.Screensaver) {
-      if (this._isStartPack) {
-        this._screen = Screen.ThemeList
-        this._eventEmitter.emit(GameEvent.StartThemeList)
+    switch (this._screen) {
+      case Screen.Screensaver: {
+        this.setScreen(Screen.ThemeList)
+        break
+      }
+
+      case Screen.ThemeList: {
+        this.setScreen(Screen.RoundName)
+        break
+      }
+
+      case Screen.RoundName: {
+        this.setScreen(Screen.ThemeListInRound)
+        break
+      }
+
+      case Screen.ThemeListInRound: {
+        this.showTableOrResults()
+        break
+      }
+
+      case Screen.QuestionPreparation: {
+        this.startPreparedQuestion()
+        break
+      }
+
+      case Screen.Question: {
+        this.nextQuestionPage()
+        break
+      }
+
+      case Screen.Results: {
+        // Results of the last round are the end of the game: nothing comes next
+        if (this._package && !this._package.isLastRound) {
+          this.nextRound()
+        }
+
+        break
+      }
+
+      default: {
+        // Initial and Table wait for selectPack / selectQuestion
+        break
+      }
+    }
+  }
+
+  public nextRound(): void {
+    if (!this._package?.nextRound()) {
+      return
+    }
+
+    this.leaveQuestion()
+    this.setScreen(Screen.RoundName)
+  }
+
+  public previousRound(): void {
+    if (!this._package) {
+      return
+    }
+
+    this.leaveQuestion()
+    this._package.previousRound()
+    this.setScreen(Screen.RoundName)
+  }
+
+  // ---- questions ----
+
+  public selectQuestion(questionId: string): void {
+    if (!this._package) {
+      throw new GameError('Пак не выбран')
+    }
+
+    const round = this._package.currentRound
+    const question = round.questionById.get(questionId)
+    if (!question) {
+      throw new GameError('Вопрос не найден в текущем раунде')
+    }
+
+    // a question is chosen from the table only; a repeated click or a played question is ignored
+    if (this._screen !== Screen.Table || !question.isAvailable) {
+      return
+    }
+
+    if (round.type === RoundType.FINAL) {
+      // final round: themes are removed one by one, the last remaining one is played as a normal question
+      if (round.themes.filter(theme => theme.hasAvailableQuestions).length > 1) {
+        question.markPlayed()
+        this.setScreen(Screen.Table)
         return
       }
 
-      this._screen = Screen.RoundName
-      this._eventEmitter.emit(GameEvent.StartRoundName)
+      this.openQuestion(question)
       return
     }
 
-    if (this._screen === Screen.ThemeListInRound) {
-      this._screen = Screen.Table
-      this._eventEmitter.emit(GameEvent.StartTable)
+    if (question.type !== QuestionType.DEFAULT) {
+      this.prepareQuestion(question)
       return
     }
 
-    if (this._screen === Screen.RoundName) {
-      this._screen = Screen.ThemeListInRound
-      this._eventEmitter.emit(GameEvent.StartThemeListInRound)
-      return
-    }
-
-    if (this._screen === Screen.Results) {
-      this.package?.nextRound()
-      return
-    }
-
-    if (this._screen === Screen.ThemeList) {
-      this._screen = Screen.RoundName
-      this._eventEmitter.emit(GameEvent.StartRoundName)
-      return
-    }
-
-    if (this._screen === Screen.QuestionPreparation) {
-      this._screen = Screen.Question
-      this._eventEmitter.emit(GameEvent.StartQuestion)
-      return
-    }
-
-    if (this._screen === Screen.Question) {
-      this.package?.currentQuestion?.enter()
-    }
+    this.openQuestion(question)
   }
+
+  // Question screen: start the current question again from the first page
+  public repeatQuestion(): void {
+    const question = this._package?.currentQuestion
+    if (this._screen !== Screen.Question || !question) {
+      return
+    }
+
+    question.restart()
+    this._queuePlayers.clear()
+    this._isButtonsActive = this.isButtonsQuestion(question)
+    this._mediaPlayer.reset(true)
+    this._eventEmitter.emit(GameEvent.UpdatePage)
+  }
+
+  // Question / QuestionPreparation: back to the table, the question stays available
+  public cancelQuestion(): void {
+    if (this._screen !== Screen.Question && this._screen !== Screen.QuestionPreparation) {
+      return
+    }
+
+    this.leaveQuestion()
+    this.setScreen(Screen.Table)
+  }
+
+  // ---- players ----
 
   public playerUsedButton(key: string) {
     const player = this.getPlayerByKey(key)
@@ -194,54 +385,60 @@ export class Game {
     }
   }
 
+  // Question: put the player into the answer queue; Table / QuestionPreparation: make them the selector
   public selectPlayer(id: string) {
     const player = this.getPlayer(id)
-    if (player) {
+    if (!player) {
+      return
+    }
+
+    if (this._screen === Screen.Question) {
       this._queuePlayers.addPlayer(player)
+    } else if (this._screen === Screen.QuestionPreparation || this._screen === Screen.Table) {
+      this.setCurrentSelector(player.id)
     }
   }
 
-  public startGame(file: string) {
-    const siq = parseSIQ(`./siq/${file}`)
-
-    this._package = new SiqPackage(siq, {
-      eventEmitter: this._eventEmitter,
-      id: this.id,
-    })
-    this._screen = Screen.Screensaver
-    this._eventEmitter.emit(GameEvent.StartScreensaver)
-  }
-
-  public addPlayer() {
-    const player = new Player({
-      eventEmitter: this._eventEmitter,
-      id: this.id,
+  public addPlayer(): Player {
+    const player = new Player(changed => {
+      this.pushPlayerUpdate(changed)
     })
     this._players.set(player.id, player)
     this._eventEmitter.emit(GameEvent.UpdatePlayers, {
-      added: [{
-        id: player.id,
-        name: player.name,
-        keyboardKey: '',
-        lose: player.loseCount,
-        win: player.winCount,
-        queue: 0,
-        score: player.score,
-      }],
+      added: [this.playerData(player)],
       removed: [],
       updated: [],
       currentSelector: this._currentSelector,
-    } as EventUpdatePlayers)
+    } satisfies EventUpdatePlayers)
+    return player
   }
 
   public removePlayer(id: string) {
     this._players.delete(id)
+    if (this._currentSelector === id) {
+      this._currentSelector = null
+    }
+
+    // positions of the remaining players are pushed with QueuePlayersUpdated
+    this._queuePlayers.removePlayer(id)
     this._eventEmitter.emit(GameEvent.UpdatePlayers, {
       added: [],
       removed: [id],
       updated: [],
       currentSelector: this._currentSelector,
-    } as EventUpdatePlayers)
+    } satisfies EventUpdatePlayers)
+  }
+
+  public updatePlayer(id: string, name: string, keyboardKey?: string) {
+    const player = this.getPlayer(id)
+    if (!player) {
+      return
+    }
+
+    player.setName(name)
+    if (keyboardKey) {
+      player.setKeyboardKey(keyboardKey)
+    }
   }
 
   public getPlayerByKey(key: string): Player | undefined {
@@ -250,22 +447,30 @@ export class Game {
         return player
       }
     }
+
+    return undefined
   }
 
   public getPlayer(id: string): Player | undefined {
     return this._players.get(id)
   }
 
+  // right answer: add the score value, show the answer (from its first page), the player chooses the next question
   public winPlayer(id: string): void {
-    const { value } = this.score
-    this._players.get(id)?.win(value)
-    this._package?.currentQuestion?.goToAnswer()
+    const player = this._players.get(id)
+    if (!player) {
+      return
+    }
+
     this._currentSelector = id
+    player.win(this._score.value)
+    if (this._package?.currentQuestion?.goToAnswer()) {
+      this._eventEmitter.emit(GameEvent.UpdatePage)
+    }
   }
 
   public losePlayer(id: string): void {
-    const { value } = this.score
-    this._players.get(id)?.lose(value)
+    this._players.get(id)?.lose(this._score.value)
     this._queuePlayers.removePlayer(id)
   }
 
@@ -276,102 +481,239 @@ export class Game {
       removed: [],
       updated: [],
       currentSelector: this._currentSelector,
-    } as EventUpdatePlayers)
+    } satisfies EventUpdatePlayers)
   }
 
   public getAllThemes(): string[] {
-    if (this._package) {
-      const themes: string[] = []
-      for (const round of this._package.rounds) {
-        for (const theme of round.themes) {
-          themes.push(theme.name)
+    return this._package?.getAllThemes() ?? []
+  }
+
+  // ---- snapshots sent to clients ----
+
+  public getSnapshot(): ResponseGetGame {
+    return {
+      gameId: this.id,
+      gameName: this._name,
+      packageName: this.packageName,
+      players: this.playersWithQueue,
+      score: this._score.value,
+      scoreBig: this._score.big,
+      scoreLittle: this._score.little,
+      progress: this.progress,
+      screenData: this.getScreenData(),
+    }
+  }
+
+  public getSettings(): ResponseGetSettings {
+    return {
+      scoreValue: this._score.value,
+      big: this._score.big,
+      little: this._score.little,
+      adminVolume: this._settings.adminVolume,
+      playerVolume: this._settings.playerVolume,
+    }
+  }
+
+  public getScreenData(): ScreenData {
+    const screen = this._screen
+    const round = this._package?.currentRound ?? null
+    switch (screen) {
+      case Screen.Question:
+      case Screen.QuestionPreparation: {
+        const question = this._package?.currentQuestion
+        if (question) {
+          return { screen, payload: this.getQuestionPayload(question) }
         }
+
+        return { screen: Screen.Table, payload: this.getTablePayload() }
       }
 
-      return themes
-    }
-
-    return []
-  }
-
-  @bind
-  private onNextRound(): void {
-    if (this.package && this.package.rounds.length > this.package.roundIndex) {
-      this._screen = Screen.RoundName
-      this._eventEmitter.emit(GameEvent.StartRoundName)
-    }
-  }
-
-  @bind
-  private onPreviousRound(): void {
-    this._screen = Screen.RoundName
-    this._eventEmitter.emit(GameEvent.StartRoundName)
-  }
-
-  @bind
-  private onOpenQuestion(question: Question) {
-    const currentRound = this.package?.getCurrentRound()
-    if(currentRound && currentRound.type === RoundType.FINAL) {
-      if(currentRound.themes.filter(t => t.questions.some(q => q.isClose)).length === 1) {
-        this._screen = Screen.Question
-        this.score.setValue(question.price)
-        this.mediaPlayer.reset()
-        process.nextTick(() => {
-          this._isButtonsActive = true
-          this._eventEmitter.emit(GameEvent.StartQuestion)
-        })
-        return
+      case Screen.Screensaver: {
+        return { screen, payload: {} }
       }
-      question.close()
-      process.nextTick(() => {
-        this._eventEmitter.emit(GameEvent.StartTable)
-      })
-      return
-    }
-    if (question.type !== QuestionType.DEFAULT) {
-      this._screen = Screen.QuestionPreparation
-      process.nextTick(() => {
-        this._eventEmitter.emit(GameEvent.StartQuestionPreparation)
-      })
-      return
-    }
 
-    this._screen = Screen.Question
-    this.score.setValue(question.price)
-    this.mediaPlayer.reset()
-    process.nextTick(() => {
-      this._isButtonsActive = true
-      this._eventEmitter.emit(GameEvent.StartQuestion)
-    })
+      case Screen.ThemeList: {
+        return { screen, payload: { themes: this.getAllThemes() } }
+      }
+
+      case Screen.RoundName: {
+        return { screen, payload: { name: round?.name ?? '', progress: this.progress } }
+      }
+
+      case Screen.ThemeListInRound: {
+        return { screen, payload: { themes: round?.themes.map(theme => theme.name) ?? [] } }
+      }
+
+      case Screen.Table: {
+        return { screen, payload: this.getTablePayload() }
+      }
+
+      case Screen.Results: {
+        return { screen, payload: this.getResultsPayload() }
+      }
+
+      default: {
+        return { screen: Screen.Initial, payload: {} }
+      }
+    }
   }
 
-  @bind
-  private onCloseQuestion() {
+  public getTablePayload(): PayloadStartTable {
+    const round = this._package?.currentRound ?? null
+    return {
+      type: round?.type ?? RoundType.DEFAULT,
+      themes: round?.themes.map(theme => ({
+        name: theme.name,
+        questions: theme.questions.map(question => ({
+          id: question.id,
+          isAvailable: question.isAvailable,
+          price: question.price,
+        })),
+      })) ?? [],
+      currentSelector: this._currentSelector,
+      progress: this.progress,
+    }
+  }
+
+  public getQuestionPayload(question: Question): PayloadStartQuestion {
+    return {
+      id: question.id,
+      comments: question.comments,
+      currentPage: question.currentPage,
+      nextPage: question.nextPage,
+      pageIndex: question.pageIndex,
+      pagesCount: question.pagesCount,
+      isAvailable: question.isAvailable,
+      price: question.price,
+      rightAnswer: question.rightAnswer,
+      selectionMode: question.selectionMode,
+      selectPrice: question.selectPrice,
+      themeName: question.themeName,
+      type: question.type,
+      wrongAnswer: question.wrongAnswer,
+      currentSelector: this._currentSelector,
+      answerGroup: question.answerGroup,
+      answerType: question.answerType,
+    }
+  }
+
+  public getQuestionPagePayload(): PayloadQuestionPage {
+    const question = this._package?.currentQuestion ?? null
+    return {
+      currentPage: question?.currentPage ?? null,
+      nextPage: question?.nextPage ?? null,
+      pageIndex: question?.pageIndex ?? 0,
+      pagesCount: question?.pagesCount ?? 0,
+    }
+  }
+
+  public getResultsPayload(): PayloadStartResults {
+    return {
+      players: this.playersWithQueue,
+      isLastRound: this._package?.isLastRound ?? true,
+      progress: this.progress,
+    }
+  }
+
+  // ---- internals ----
+
+  // a player as clients see it, with the position in the answer queue
+  private playerData(player: Player): PlayerType {
+    return {
+      id: player.id,
+      name: player.name,
+      keyboardKey: player.keyboardKey,
+      score: player.score,
+      win: player.winCount,
+      lose: player.loseCount,
+      queue: this._queuePlayers.getPlayer(player.id),
+    }
+  }
+
+  // the complete data of a changed player: a client merges it over its copy, so a partial one would erase fields
+  private pushPlayerUpdate(player: Player) {
+    if (!this._players.has(player.id)) {
+      return
+    }
+
+    this._eventEmitter.emit(GameEvent.UpdatePlayers, {
+      added: [],
+      removed: [],
+      updated: [this.playerData(player)],
+      currentSelector: this._currentSelector,
+    } satisfies EventUpdatePlayers)
+  }
+
+  private setScreen(screen: Screen) {
+    this._screen = screen
+    const event = screenEvents[screen]
+    if (event) {
+      this._eventEmitter.emit(event)
+    }
+  }
+
+  private showTableOrResults() {
+    const round = this._package?.currentRound
+    this.setScreen(round && !round.hasAvailableQuestions ? Screen.Results : Screen.Table)
+  }
+
+  // buttons work for normal questions and for the question of the final round
+  private isButtonsQuestion(question: Question): boolean {
+    return question.type === QuestionType.DEFAULT || this._package?.currentRound.type === RoundType.FINAL
+  }
+
+  private openQuestion(question: Question) {
+    this._package?.setCurrentQuestion(question)
+    question.restart()
+    this._queuePlayers.clear()
+    this._score.setValue(question.price)
+    this._mediaPlayer.reset()
+    this._isButtonsActive = true
+    this.setScreen(Screen.Question)
+  }
+
+  // special question: the host sets the price / player first, buttons stay off
+  private prepareQuestion(question: Question) {
+    this._package?.setCurrentQuestion(question)
+    question.restart()
+    this._queuePlayers.clear()
+    this._isButtonsActive = false
+    this.setScreen(Screen.QuestionPreparation)
+  }
+
+  private startPreparedQuestion() {
+    if (!this._package?.currentQuestion) {
+      this.showTableOrResults()
+      return
+    }
+
+    this._mediaPlayer.reset()
+    this.setScreen(Screen.Question)
+  }
+
+  private nextQuestionPage() {
+    const question = this._package?.currentQuestion
+    if (!question) {
+      this.showTableOrResults()
+      return
+    }
+
+    if (question.goToNextPage()) {
+      this._eventEmitter.emit(GameEvent.UpdatePage)
+      return
+    }
+
+    // the last page was shown: the question is played
+    question.markPlayed()
+    this.leaveQuestion()
+    this.showTableOrResults()
+  }
+
+  // forget the current question (it keeps its played / available state)
+  private leaveQuestion() {
+    this._package?.currentQuestion?.restart()
+    this._package?.setCurrentQuestion(null)
     this._isButtonsActive = false
     this._queuePlayers.clear()
-    this._screen = Screen.Table
-    this._eventEmitter.emit(GameEvent.StartTable)
-  }
-
-  @bind
-  private onStartResultsOnCloseAllQuestions() {
-    this._screen = Screen.Results
-    this._eventEmitter.emit(GameEvent.StartResults)
-  }
-
-  private sub() {
-    this._eventEmitter.on(GameEvent.OpenQuestion, this.onOpenQuestion)
-    this._eventEmitter.on(GameEvent.CloseQuestion, this.onCloseQuestion)
-    this._eventEmitter.on(GameEvent.NextRound, this.onNextRound)
-    this._eventEmitter.on(GameEvent.PreviousRound, this.onPreviousRound)
-    this._eventEmitter.on(GameEvent.StartResultsOnCloseAllQuestions, this.onStartResultsOnCloseAllQuestions)
-  }
-  
-  private unSub() {
-    this._eventEmitter.off(GameEvent.OpenQuestion, this.onOpenQuestion)
-    this._eventEmitter.off(GameEvent.CloseQuestion, this.onCloseQuestion)
-    this._eventEmitter.off(GameEvent.NextRound, this.onNextRound)
-    this._eventEmitter.off(GameEvent.PreviousRound, this.onPreviousRound)
-    this._eventEmitter.off(GameEvent.StartResultsOnCloseAllQuestions, this.onStartResultsOnCloseAllQuestions)
   }
 }

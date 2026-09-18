@@ -1,17 +1,16 @@
 'use client';
 
-import { client } from '@/client';
 import React, {
     memo,
     useCallback,
     useContext,
-    useEffect,
     useMemo,
-    useState,
+    useRef,
 } from 'react';
 
 import type { PropsWithChildren } from 'react';
 import * as useSoundLib from 'use-sound';
+import { toMediaVolume, useGameStore } from '@/store/game';
 
 
 export enum SoundType {
@@ -35,17 +34,28 @@ const SoundContext = React.createContext<ContextType | null>(null);
 
 // eslint-disable-next-line react/display-name
 export const SoundProvider: React.FC<PropsWithChildren> = memo(({ children }) => {
+    // game sounds are played on the player screen, so they follow the player volume from the settings
+    const volume = toMediaVolume(useGameStore(state => state.settings?.playerVolume))
+    const volumeRef = useRef(volume)
+    volumeRef.current = volume
+    // use-sound updates the volume of loaded sounds only; sounds that finish loading later pick it up in onload
+    const options = useMemo(() => ({
+        volume,
+        onload(this: { volume: (value: number) => unknown }) {
+            this.volume(volumeRef.current)
+        },
+    }), [volume])
 
-    const [playFinalDelete] = useSoundLib.useSound('/MUSIC/final_delete.mp3')
-    const [playFinalThink] = useSoundLib.useSound('/MUSIC/final_think.mp3')
-    const [playGameBegin] = useSoundLib.useSound('/MUSIC/game_begin.mp3')
-    const [playQuestionNoanswers] = useSoundLib.useSound('/MUSIC/question_noanswers.mp3')
-    const [playQuestionNorisk] = useSoundLib.useSound('/MUSIC/question_norisk.mp3')
-    const [playQuestionSecret] = useSoundLib.useSound('/MUSIC/question_secret.mp3')
-    const [playQuestionStake] = useSoundLib.useSound('/MUSIC/question_stake.mp3')
-    const [playRoundBegin] = useSoundLib.useSound('/MUSIC/round_begin.mp3')
-    const [playRoundThemes] = useSoundLib.useSound('/MUSIC/round_themes.mp3')
-    const [playRoundTimeout] = useSoundLib.useSound('/MUSIC/round_timeout.mp3')
+    const [playFinalDelete] = useSoundLib.useSound('/MUSIC/final_delete.mp3', options)
+    const [playFinalThink] = useSoundLib.useSound('/MUSIC/final_think.mp3', options)
+    const [playGameBegin] = useSoundLib.useSound('/MUSIC/game_begin.mp3', options)
+    const [playQuestionNoanswers] = useSoundLib.useSound('/MUSIC/question_noanswers.mp3', options)
+    const [playQuestionNorisk] = useSoundLib.useSound('/MUSIC/question_norisk.mp3', options)
+    const [playQuestionSecret] = useSoundLib.useSound('/MUSIC/question_secret.mp3', options)
+    const [playQuestionStake] = useSoundLib.useSound('/MUSIC/question_stake.mp3', options)
+    const [playRoundBegin] = useSoundLib.useSound('/MUSIC/round_begin.mp3', options)
+    const [playRoundThemes] = useSoundLib.useSound('/MUSIC/round_themes.mp3', options)
+    const [playRoundTimeout] = useSoundLib.useSound('/MUSIC/round_timeout.mp3', options)
 
 
     const playSound = useCallback((soundType: SoundType): void => {

@@ -1,4 +1,4 @@
-import type { ThemeConfig } from 'antd/lib';
+import type { ThemeConfig } from 'antd';
 
 const theme: ThemeConfig = {
   token: {

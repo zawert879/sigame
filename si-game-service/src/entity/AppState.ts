@@ -1,16 +1,16 @@
-
 import { Game } from './Game'
-import { clearPackage } from '../utils/clearPackages'
+import { removeGameMedia } from '../utils/packages'
 
 export class AppState {
   private _games = new Map<string, Game>()
 
   public get games(): Game[] {
-    return [...this._games.values()]
+    return [...this._games.values()].filter(game => !game.isClosed)
   }
 
   findGame(gameId: string): Game | null {
-    return this._games.get(gameId) ?? null
+    const game = this._games.get(gameId)
+    return game && !game.isClosed ? game : null
   }
 
   newGame(gameName: string): Game {
@@ -19,12 +19,20 @@ export class AppState {
     return game
   }
 
-  closeGame(gameId: string) {
-    if (this._games.has(gameId)) {
-      const game = this._games.get(gameId)!
+  // The game leaves the list before anything else happens, so it is never found again even when a later step fails.
+  // Resolves once its media are removed; that never fails (a directory that cannot be removed is logged and removed
+  // at a later start, see utils/packages.ts).
+  async closeGame(gameId: string): Promise<void> {
+    const game = this._games.get(gameId)
+    if (!game) {
+      return
+    }
+
+    this._games.delete(gameId)
+    try {
       game.closeGame()
-      clearPackage(game.id)
-      this._games.delete(game.id)
+    } finally {
+      await removeGameMedia(game.id)
     }
   }
 }

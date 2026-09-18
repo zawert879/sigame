@@ -1,6 +1,8 @@
 import { v4 as uuid } from 'uuid'
-import { type EventUpdatePlayers, type GameContainer } from '../types'
-import { GameEvent } from '../events'
+
+// Called after every change of a player. The game pushes the update: only it knows the queue position and the
+// current selector, which are part of the player data sent to clients.
+export type PlayerChangeListener = (player: Player) => void
 
 export class Player {
   public readonly id = uuid()
@@ -10,10 +12,8 @@ export class Player {
   private _winCount = 0
   private _loseCount = 0
   private _score = 0
-  private _eventEmitter
-  constructor(gameContainer: GameContainer) {
-    this._eventEmitter = gameContainer.eventEmitter
-  }
+
+  constructor(private readonly _onChange: PlayerChangeListener = () => undefined) {}
 
   public get name(): string {
     return this._name
@@ -21,12 +21,12 @@ export class Player {
 
   public setName(value: string) {
     this._name = value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   public setKeyboardKey(value: string) {
     this._keyboardKey = value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   get winCount(): number {
@@ -48,45 +48,27 @@ export class Player {
   public win(value: number) {
     this._winCount += 1
     this._score += value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   public lose(value: number) {
     this._loseCount += 1
     this._score -= value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   public setLose(value: number) {
     this._loseCount = value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   public setWin(value: number) {
     this._winCount = value
-    this.sendUpdatePlayer()
+    this._onChange(this)
   }
 
   public setScore(value: number) {
     this._score = value
-    this.sendUpdatePlayer()
-  }
-
-  private sendUpdatePlayer() {
-    this._eventEmitter.emit(GameEvent.UpdatePlayers, {
-      added: [],
-      removed: [],
-      updated: [{
-        id: this.id,
-        name: this._name,
-        keyboardKey: this._keyboardKey,
-        score: this.score,
-        lose: this.loseCount,
-        queue: null,
-        win: this.winCount,
-      }],
-      currentSelector: null, // хреновая идея, подпер костыль оверайдом в контроллере
-    } as EventUpdatePlayers)
+    this._onChange(this)
   }
 }
-

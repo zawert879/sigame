@@ -1,0 +1,73 @@
+name: Build desktop apps
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  build:
+    name: Package Windows and macOS
+    needs: check
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: |
+            si-game-admin-2/yarn.lock
+            si-game-service/yarn.lock
+
+      - name: Install frontend dependencies
+        working-directory: si-game-admin-2
+        run: yarn install --frozen-lockfile
+
+      - name: Install backend dependencies
+        working-directory: si-game-service
+        run: yarn install --frozen-lockfile
+
+      - name: Build Windows and macOS executables
+        run: yarn package:all
+
+      - name: Smoke-test the macOS executable
+        env:
+          SMOKE_EXECUTABLE: release/sigame-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+        run: yarn smoke "$SMOKE_EXECUTABLE"
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: sigame-windows-x64
+          path: release/sigame.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload macOS Apple Silicon build
+        uses: actions/upload-artifact@v7
+        with:
+          name: sigame-macos-arm64
+          path: release/sigame-macos-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload macOS Intel build
+        uses: actions/upload-artifact@v7
+        with:
+          name: sigame-macos-x64
+          path: release/sigame-macos-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 14

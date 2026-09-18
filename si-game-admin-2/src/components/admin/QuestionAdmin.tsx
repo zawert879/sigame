@@ -1,15 +1,17 @@
 import { FC, useCallback } from "react";
-import { StopOutlined } from "@ant-design/icons/lib";
-import { Space } from "antd/lib";
+import { StopOutlined } from "@ant-design/icons";
+import { Space } from "antd";
 import { costToString, getLocalizedQuestionType } from "@/utils/utils";
 import { QuestionType as QuestionTypeComponent } from "@/components/question/QuestionType";
 import { QuestionAnswerType, QuestionType, SelectionModeType } from "@/data";
 import { PayloadQuestionPage, PayloadStartQuestion } from "@/types";
 import { AdminPage } from "./AdminPage";
-import { getGameIdFromPath } from "@/utils/route";
+import { useGameStore } from "@/store/game";
+import { mediaUrl } from "@/utils/api";
 
 export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: PayloadQuestionPage, isPreparation: boolean }> = ({ question, pageData, isPreparation }) => {
-  const gameId = getGameIdFromPath()
+  const gameId = useGameStore(state => state.gameId)
+  const questionRun = useGameStore(state => state.questionRun)
   const subText = useCallback((text: string, count: number) => {
     if (text.length < count) {
       return text;
@@ -47,13 +49,12 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
           >
             {isPreparation
               ? <QuestionTypeComponent text={question.type} /> :
-              pageData.currentPage && (<AdminPage page={pageData.currentPage} isAdmin />)}
+              pageData.currentPage && (<AdminPage key={`${questionRun}-${pageData.pageIndex}`} page={pageData.currentPage} />)}
           </div>
           <div className="w-1/4">
             {question.answerType === QuestionAnswerType.Group && question.answerGroup.length > 0 && (
               <div className="h-[400px] py-4 w-1/4 border-l-white border-l-2 ml-4 flex flex-col justify-around items-center">
-                {question.answerGroup.map((ag, index) => {
-                  console.warn(ag);
+                {question.answerGroup.map((ag) => {
                   return (
                     <div key={ag.variant} className="flex">
                       {ag.variant}: {typeof ag.answer !== 'object' ? ag.answer : (<picture
@@ -61,11 +62,7 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
                         className=""
                       >
                         <img
-                          src={
-                            /^https?:\/\//.test(ag.answer["#text"])
-                              ? ag.answer["#text"]
-                              : `/api/files/${gameId}/Images/${ag.answer["#text"]}`
-                          }
+                          src={mediaUrl(gameId, "Images", ag.answer["#text"])}
                           alt="image"
                           className="h-full"
                         />
@@ -97,7 +94,7 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
           </div>
           <div className={`w-1/2 h-full border-l-2 border-l-white text-center flex justify-center items-center ${pageData.nextPage?.isMarker && "border-white border-[10px] border-l-[10px]"}`}>
             {pageData.nextPage ? (
-              <AdminPage page={pageData.nextPage} isAdmin isPreview />
+              <AdminPage page={pageData.nextPage} isPreview />
             ) : (
               <Space direction="vertical">
                 <StopOutlined style={{ fontSize: 50 }} />
@@ -109,5 +106,4 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
       </div >
     </>
   );
-  return <></>
 };

@@ -1,41 +1,39 @@
-import { Progress as ProgressAnt, Space } from "antd/lib";
+import { Progress as ProgressAnt, Space } from "antd";
 import React from "react";
 
-export interface ProgressProps {
-  round: number;
-  question: number;
-  reflection: number;
+export interface ProgressValue {
+  value: number;
+  total: number;
 }
 
-export const Progress: React.FC<ProgressProps> = ({
-  question,
-  reflection,
-  round,
-}) => (
+export interface ProgressProps {
+  // rounds of the pack
+  game: ProgressValue;
+  // played questions of the current round
+  round: ProgressValue;
+  // pages of the current question
+  question: ProgressValue;
+}
+
+const percentOf = ({ value, total }: ProgressValue): number =>
+  total > 0 ? Math.min(100, Math.max(0, Math.round((value / total) * 100))) : 0;
+
+const ProgressRow: React.FC<{ label: string; progress: ProgressValue }> = ({ label, progress }) => (
+  <Space.Compact block>
+    <p className="w-28 mx-2 text-right">{label}</p>
+    <ProgressAnt
+      percent={percentOf(progress)}
+      format={() => (progress.total > 0 ? `${progress.value}/${progress.total}` : "—")}
+      status="active"
+      strokeColor={{ from: "#108ee9", to: "#87d068" }}
+    />
+  </Space.Compact>
+);
+
+export const Progress: React.FC<ProgressProps> = ({ game, round, question }) => (
   <Space.Compact block direction="vertical" className="pr-4">
-    <Space.Compact block>
-      <p className="w-28 mx-2 text-right">Раунд</p>
-      <ProgressAnt
-        percent={question ?? 0 }
-        status="active"
-        strokeColor={{ from: "#108ee9", to: "#87d068" }}
-      />
-    </Space.Compact>
-    <Space.Compact block>
-      <p className="w-28 mx-2 text-right">Вопрос</p>
-      <ProgressAnt
-        percent={reflection ?? 0 }
-        status="active"
-        strokeColor={{ from: "#108ee9", to: "#87d068" }}
-      />
-    </Space.Compact>{" "}
-    <Space.Compact block>
-      <p className="w-28 mx-2 text-right">Размышление</p>
-      <ProgressAnt
-        percent={round ?? 0 }
-        status="active"
-        strokeColor={{ from: "#108ee9", to: "#87d068" }}
-      />
-    </Space.Compact>
+    <ProgressRow label="Игра" progress={game} />
+    <ProgressRow label="Раунд" progress={round} />
+    <ProgressRow label="Вопрос" progress={question} />
   </Space.Compact>
 );

@@ -1,16 +1,14 @@
 import usePacksStore from "@/store/packs";
 import { useEffect } from "react";
 import { PackListItem } from "./PackListItem";
+import { notifyError } from "@/utils/notify";
 
 
-export const PackList: React.FC<{ forceRefreshCb: () => void }> = ({ forceRefreshCb }) => {
+export const PackList: React.FC = () => {
   const { packs, fetchPacks } = usePacksStore()
   useEffect(() => {
-    (async () => {
-      await fetchPacks()
-      forceRefreshCb()
-    })()
-  }, [fetchPacks, forceRefreshCb])
+    fetchPacks().catch(error => notifyError(error, 'Не удалось получить список паков'))
+  }, [fetchPacks])
 
   if (packs.length === 0) return null
   return (

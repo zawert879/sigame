@@ -1,15 +1,15 @@
-import { Button, Divider, Flex, Modal } from "antd/lib";
-import React, { memo, useCallback, useEffect, useState } from "react";
+import { Button, Divider, Flex, Modal } from "antd";
+import React, { memo, useCallback, useState } from "react";
 import { PlayerInSetting } from "./PlayerInSetting";
-import { nanoid } from "nanoid";
-import { EventUpdatePlayers, ResponseGetPlayers } from "@/types";
 import { client } from "@/client";
-import { Event } from "@/data";
+import { useGameStore } from "@/store/game";
+import { notifyError } from "@/utils/notify";
 
 // eslint-disable-next-line react/display-name
 export const PlayerSettingsModal: React.FC = memo(() => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [players, setPlayers] = useState<ResponseGetPlayers>([])
+  // kept up to date by onUpdatePlayers in the game store
+  const players = useGameStore(state => state.players)
 
   const showModal = useCallback(() => {
     setIsModalOpen(true);
@@ -19,56 +19,39 @@ export const PlayerSettingsModal: React.FC = memo(() => {
     setIsModalOpen(false);
   }, []);
 
-
-  const onUpdatePlayer = useCallback((data: EventUpdatePlayers) => {
-    let buff = [...players]
-    for (const player of data.added) {
-      buff.push(player)
-    }
-
-    buff = buff.filter(player => {
-      return !data.removed.includes(player.id)
-    })
-
-    for (const player of data.updated) {
-      const found = buff.find(p => p.id === player.id)
-      if (found) {
-        found.keyboardKey = player.keyboardKey
-        found.name = player.name
-      }
-    }
-
-    setPlayers(buff)
-  }, [players])
-
-  useEffect(() => {
-    client.socket.socketIo.on(Event.OnUpdatePlayers, onUpdatePlayer)
-
-    return () => {
-      client.socket.socketIo.off(Event.OnUpdatePlayers, onUpdatePlayer)
-    }
-  }, [onUpdatePlayer])
-
-  useEffect(() => {
-    const fetch = async () => {
-      setPlayers(await client.getPlayers())
-    }
-    fetch()
-  }, [])
-
   const onDeletePlayer = useCallback((playerId: string) => async () => {
-    await client.removePlayer(playerId)
+    try {
+      await client.removePlayer(playerId)
+    } catch (error) {
+      notifyError(error, 'Не удалось удалить игрока')
+    }
   }, [])
 
   const onNewPlayer = useCallback(async () => {
-    await client.addPlayer()
+    try {
+      await client.addPlayer()
+    } catch (error) {
+      notifyError(error, 'Не удалось добавить игрока')
+    }
   }, [])
 
   const onChangeName = useCallback((playerId: string) => async (name: string) => {
-    await client.updatePlayer(playerId, name, undefined)
+    try {
+      const player = useGameStore.getState().players.find(p => p.id === playerId)
+      await client.updatePlayer(playerId, name, player?.keyboardKey)
+    } catch (error) {
+      notifyError(error, 'Не удалось переименовать игрока')
+    }
   }, [])
 
-
+  const onChangeKey = useCallback((playerId: string) => async (code: string) => {
+    try {
+      const player = useGameStore.getState().players.find(p => p.id === playerId)
+      await client.updatePlayer(playerId, player?.name ?? '', code)
+    } catch (error) {
+      notifyError(error, 'Не удалось назначить кнопку')
+    }
+  }, [])
 
   return (
     <>
@@ -79,11 +62,6 @@ export const PlayerSettingsModal: React.FC = memo(() => {
         title="Настройка игроков"
         open={isModalOpen}
         onCancel={handleCancel}
-        afterOpenChange={(open) => {
-          if (!open) {
-            // setLocalPlayers(players)
-          }
-        }}
         footer={[
           <Button block key="back" onClick={handleCancel}>
             Назад
@@ -99,7 +77,14 @@ export const PlayerSettingsModal: React.FC = memo(() => {
           <Divider />
           {
             players.map(player => (
-              <PlayerInSetting key={player.id} onChangeName={onChangeName(player.id)} onDelete={onDeletePlayer(player.id)} name={player.name} />
+              <PlayerInSetting
+                key={player.id}
+                onChangeName={onChangeName(player.id)}
+                onChangeKey={onChangeKey(player.id)}
+                onDelete={onDeletePlayer(player.id)}
+                name={player.name}
+                keyboardKey={player.keyboardKey}
+              />
             ))
           }
           <Divider />

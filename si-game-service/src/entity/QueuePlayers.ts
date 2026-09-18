@@ -17,7 +17,6 @@ export class QueuePlayers {
   }
 
   public addPlayer(player: Player) {
-    console.log(this.queue)
     if (!this._queue.includes(player.id)) {
       this._queue.push(player.id)
       this._eventEmitter.emit(GameEvent.QueuePlayersUpdated)
@@ -34,6 +33,10 @@ export class QueuePlayers {
   }
 
   public clear() {
+    if (this._queue.length === 0) {
+      return
+    }
+
     this._queue = []
     this._eventEmitter.emit(GameEvent.QueuePlayersUpdated)
   }

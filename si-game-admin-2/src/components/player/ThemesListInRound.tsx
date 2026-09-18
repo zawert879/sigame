@@ -4,10 +4,8 @@ const ThemesListInRound: FC<{ themes: string[] }> = ({ themes }) => {
   const [themeIndex, setThemeIndex] = useState(0)
 
   const onAnimationEnd = () => {
-    if(themeIndex <= themes.length -1 ){
+    if (themeIndex <= themes.length - 1) {
       setThemeIndex(themeIndex + 1)
-    }else{
-      console.log('onAnimationEnd')
     }
   };
 

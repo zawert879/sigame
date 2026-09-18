@@ -1,14 +1,21 @@
-import { message, Spin, UploadProps } from "antd/lib";
-import { Upload } from "antd/lib";
+import { Spin, UploadProps } from "antd";
+import { Upload } from "antd";
 import React, { useState } from "react";
-import { CloudUploadOutlined, LoadingOutlined } from "@ant-design/icons/lib";
+import { CloudUploadOutlined, LoadingOutlined } from "@ant-design/icons";
 import usePacksStore from "@/store/packs";
+import { adminApiUrl, httpErrorMessage } from "@/utils/api";
+import { notifyError, notifyErrorText, notifySuccess } from "@/utils/notify";
 
 const { Dragger } = Upload;
 
 enum Statuses {
   Ready,
   Uploading,
+}
+
+const uploadErrorStatus = (error: unknown): number => {
+  const status = (error as { status?: unknown } | undefined)?.status
+  return typeof status === 'number' ? status : 0
 }
 
 export const UploadPack: React.FC = () => {
@@ -18,7 +25,7 @@ export const UploadPack: React.FC = () => {
   const props: UploadProps = {
     name: "file",
     accept: '.siq',
-    action: '/api/upload',
+    action: adminApiUrl('/api/upload'),
     multiple: true,
     async onChange(info) {
       const { status } = info.file;
@@ -29,13 +36,16 @@ export const UploadPack: React.FC = () => {
         setStatus(Statuses.Uploading)
       }
       if (status === 'done') {
-        await fetchPacks()
         setStatus(Statuses.Ready)
-        message.success(`${info.file.name} file uploaded successfully.`);
-        
+        notifySuccess(`Пак «${info.file.name}» загружен`);
+        try {
+          await fetchPacks()
+        } catch (error) {
+          notifyError(error, 'Не удалось обновить список паков')
+        }
       } else if (status === 'error') {
         setStatus(Statuses.Ready)
-        message.error(`${info.file.name} file upload failed.`);
+        notifyErrorText(`Не удалось загрузить «${info.file.name}»: ${httpErrorMessage(uploadErrorStatus(info.file.error))}`);
       }
     },
   };
@@ -51,11 +61,10 @@ export const UploadPack: React.FC = () => {
               }
             </p>
             <p className="ant-upload-text">
-              Кликните или перетащите siq фаил
+              Кликните или перетащите siq файл
             </p>
             <p className="ant-upload-hint">
-              Support for a single upload. Strictly prohibited from
-              uploading company data or other banned files.
+              Можно выбрать несколько паков .siq сразу
             </p>
           </Dragger>
         </div>

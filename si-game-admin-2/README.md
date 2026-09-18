@@ -1,40 +1,57 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# si-game-admin-2 — фронтенд SI Game
 
-## Getting Started
+Интерфейс «Своей игры»: экран игроков (телевизор) и пульт ведущего (телефон/планшет).
+Next.js 14 (pages router) + antd 5 + Tailwind, состояние игры — zustand, связь с сервером — socket.io.
 
-First, run the development server:
+- `/player/<id>` — экран игроков: табло, вопросы, медиа, звуки, итоги. На начальном экране — QR и кнопка GO
+  для открытия пульта ведущего.
+- `/admin/<id>` — пульт ведущего: игроки и выбор пака, ход игры, очки, меню (раунды, повтор/отмена вопроса,
+  настройки, выход).
+- `/` — открывает экран игроков первой игры на сервере, `/admin` — пульт ведущего первой игры.
+
+## Как это работает в проде
+
+Приложение собирается в чистую статику (`output: 'export'` → `out/`), её раздаёт **si-game-service**
+(вместе с socket.io, REST и медиа паков). Серверного Next в проде нет. Маршруты `/admin/<id>` и `/player/<id>`
+сервер отдаёт как `admin.html` / `player.html` (SPA-fallback), id игры берётся из адреса страницы.
+Страницы `pages/admin/[id].tsx` и `pages/player/[id].tsx` нужны только для `next dev`.
+
+Полная сборка вместе с сервером — `yarn build` в корне репозитория.
+
+## Разработка
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+yarn install
+cp .env.example .env.development.local   # адрес сервера для dev
+yarn dev                                 # http://localhost:3000, сервер должен быть запущен отдельно
+yarn typecheck                           # tsc --noEmit
+yarn lint
+yarn build                               # статический экспорт в out/
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`NEXT_PUBLIC_SERVER_URL` — адрес si-game-service (по умолчанию в `.env.example` — `http://localhost:4000`).
+Можно указать без протокола (`localhost:4000`), тогда используется `http://`. Если переменная не задана,
+используется адрес самой страницы — так работает прод.
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+Задавайте её только в `.env.development.local`: этот файл Next читает лишь в `next dev`. `.env.local` и `.env`
+читает и `next build` — адрес попал бы в статический экспорт, и собранный sigame на другом устройстве в сети
+ходил бы на свой `localhost`. Если переменная задана при `next build`, сборка печатает предупреждение.
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+## Токен ведущего
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+Если на сервере задан `ADMIN_TOKEN`, управлять игрой, загружать и удалять паки можно только с токеном.
+Откройте на устройстве ведущего любую страницу с параметром `?token=<токен>` — удобнее всего `/admin?token=<токен>`,
+он открывает пульт текущей игры. Токен запомнится в браузере (`localStorage`, ключ `sigame.adminToken`) и будет
+отправляться с каждым запросом: в сокете — в `auth`, в REST (загрузка и удаление паков) — в параметре `?token=`
+(HTTP-заголовок не пропускает символы вне Latin-1, например кириллицу). Пустой `?token=` забывает сохранённый
+токен. QR и кнопка GO на экране игроков ведут на пульт **без** токена: этот экран видят игроки. Устройство, на котором
+токен уже сохранён, использует свой.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## Структура
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+- `src/client/` — socket.io-клиент: запросы с подтверждением и таймаутом, ошибки `RequestError`,
+  переподключение (игра выбирается заново, экраны перезагружают снимок).
+- `src/store/game.ts` — единое состояние экрана игры; `src/hooks/useGameConnection.ts` — загрузка снимка
+  (`getGame`) и применение серверных событий.
+- `src/components/screens/` — экраны ведущего и игроков; `src/pages/` — тонкие обёртки над ними.
+- Протокол (события и типы) — в `../common/` (общий с сервером).

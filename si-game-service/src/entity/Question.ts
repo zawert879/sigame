@@ -1,93 +1,119 @@
-import { CostType, SelectionModeType, QuestionType, QuestionAnswerType } from '../data'
-import { type SIQ } from '../serverTypes'
 import { v4 as uuid } from 'uuid'
-
+import { CostType, QuestionAnswerType, QuestionType, SelectionModeType } from '../data'
+import { type SIQ } from '../serverTypes'
+import { type PageSnapshotType, type PayloadStartQuestion } from '../types'
+import { numberOf, textList, textOf, toArray } from '../utils/siqValue'
 import { type Page } from './Page'
 import { PageBuilder } from './PageBuilder'
-import { type GameContainer, type PageSnapshotType } from '../types'
-import type EventEmitter from 'eventemitter3'
-import { GameEvent } from '../events'
 
-type ParamItem = string |
-{
-  '#text': string;
-  attributes: {
-    type: 'image' | 'audio' | 'video' | 'html';
-    isRef?: 'True';
-    waitForFinish: 'False';
-    placement?: 'background' | 'replic';
-    duration: string;
-  };
+type QuestionData = SIQ.Content.Package.Round.Theme.Question
+type Param = SIQ.Content.Package.Round.Theme.Question.Param
+type ContentItem = SIQ.Content.Package.Round.Theme.Question.ContentItem
+type ScenarioAtom = SIQ.Content.Package.Round.Theme.Question.ScenarioAtom
+type SelectPrice = NonNullable<PayloadStartQuestion['selectPrice']>
+type AnswerGroupItem = PayloadStartQuestion['answerGroup'][number]
+
+// SIQ 5: <question type="...">
+const siq5Types: Record<string, QuestionType> = {
+  stake: QuestionType.STAKE,
+  secret: QuestionType.SECRET,
+  secretPublicPrice: QuestionType.SECRET_PUBLIC_PRICE,
+  secretNoQuestion: QuestionType.SECRET_NO_QUESTION,
+  noRisk: QuestionType.NO_RISC,
 }
+
+// SIQ 4: <type name="...">
+const siq4Types: Record<string, QuestionType> = {
+  cat: QuestionType.SECRET,
+  bagcat: QuestionType.SECRET,
+  auction: QuestionType.STAKE,
+  sponsored: QuestionType.NO_RISC,
+}
+
+// SIQ 5 params that are known but do not affect pages
+const passiveParams = new Set(['answerType', 'answerOptions', 'answerDeviation'])
+
+const isObject = <T>(value: T): value is Exclude<T, string | number | boolean | null | undefined> =>
+  typeof value === 'object' && value !== null
+
+// SIQ 4 media reference: '@name' is a file of the pack, anything else is used as is (URL)
+const mediaRef = (value: string): string => value.startsWith('@') ? value.slice(1) : value
 
 export class Question {
   readonly id: string
   readonly comments: string | null
-  readonly rightAnswer: string[] | null = null
-  readonly wrongAnswer: string[] | null = null
+  readonly rightAnswer: string[] | null
+  readonly wrongAnswer: string[] | null
   readonly price: number
   readonly type: QuestionType
-  readonly _answerGroup: { answer: string, variant: string }[] = []
+  private readonly _answerGroup: AnswerGroupItem[] = []
   private _pages: Page[] | null = null
   private _pageIndex = 0
-  private _selectPrice: { minimum: number; maximum: number; step: number; type: CostType } | null = null
+  private _selectPrice: SelectPrice | null = null
 
   private _themeName: string
   private _selectionMode: SelectionModeType | null = null
-  private _isClose = true
+  private _isAvailable: boolean
   private _answerType: QuestionAnswerType = QuestionAnswerType.DEFAULT
 
-  constructor(questionData: SIQ.Content.Package.Round.Theme.Question, themeName: string, gameContainer: GameContainer) {
+  constructor(questionData: QuestionData, themeName: string) {
     this.id = uuid()
-    this._eventEmitter = gameContainer.eventEmitter
     this._themeName = themeName
-    this.comments = questionData.info?.comments ?? null
-    this.type = this.parseType(questionData.attributes.type)
-    this.parseAnswerGroup(questionData)
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    this.rightAnswer = questionData.right ? Array.isArray(questionData.right.answer) ? questionData.right.answer.map(a => a.toString()) : [questionData.right.answer.toString()] : null
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call
-    this.wrongAnswer = questionData.wrong ? Array.isArray(questionData.wrong.answer) ? questionData.wrong.answer.map(a => a.toString()) : [questionData.wrong.answer.toString()] : null
-    this.price = +questionData.attributes.price
+    this.comments = textOf(questionData.info?.comments)
 
-    if (this.price < 0) {
-      this.close()
-    }
+    const rightAnswer = textList(questionData.right?.answer)
+    this.rightAnswer = rightAnswer.length > 0 ? rightAnswer : null
+    const wrongAnswer = textList(questionData.wrong?.answer)
+    this.wrongAnswer = wrongAnswer.length > 0 ? wrongAnswer : null
 
-    const params = questionData.params ? Array.isArray(questionData.params.param) ? questionData.params.param : [questionData.params.param] : null
-    if (params) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    this.price = numberOf(questionData.attributes?.price) ?? 0
+    // A question with a negative price is not played: it is marked as played right away, without events
+    this._isAvailable = this.price >= 0
+
+    const params = toArray(questionData.params?.param).filter(param => isObject(param))
+    if (params.length > 0) {
+      // SIQ 5
+      this.type = siq5Types[questionData.attributes?.type ?? ''] ?? QuestionType.DEFAULT
+      this.parseAnswerGroup(params)
       this.parseParams(params)
+      return
     }
 
-    // this.autoClose()
+    // SIQ 4 (or a question without content)
+    if (isObject(questionData.type)) {
+      this.type = siq4Types[questionData.type.attributes?.name ?? ''] ?? QuestionType.DEFAULT
+      this.parseTypeParams(questionData.type)
+    } else {
+      this.type = siq5Types[questionData.attributes?.type ?? ''] ?? QuestionType.DEFAULT
+    }
+
+    const atoms = toArray(questionData.scenario?.atom)
+    if (atoms.length > 0) {
+      this.parseScenario(atoms)
+    }
   }
 
   public get pages(): PageSnapshotType[] | null {
-    return this._pages
+    return this._pages ? this._pages.map(page => page.snapshot) : null
+  }
+
+  public get pageIndex(): number {
+    return this._pageIndex
+  }
+
+  public get pagesCount(): number {
+    return this._pages?.length ?? 0
   }
 
   public get currentPage(): PageSnapshotType | null {
-    if (!this._pages) {
-      return null
-    }
-
-    return this._pages[this._pageIndex].snapshot
+    return this._pages?.[this._pageIndex]?.snapshot ?? null
   }
 
   public get nextPage(): PageSnapshotType | null {
-    if (!this._pages) {
-      return null
-    }
-
-    if (this._pages.length - 1 < this._pageIndex + 1) {
-      return null
-    }
-
-    return this._pages[this._pageIndex + 1].snapshot
+    return this._pages?.[this._pageIndex + 1]?.snapshot ?? null
   }
 
-  public get selectPrice(): { minimum: number; maximum: number; step: number; type: CostType } | null {
+  public get selectPrice(): SelectPrice | null {
     return this._selectPrice
   }
 
@@ -99,206 +125,350 @@ export class Question {
     return this._themeName
   }
 
-  public get isClose(): boolean {
-    return this._isClose
+  // true while the question has not been played yet
+  public get isAvailable(): boolean {
+    return this._isAvailable
   }
 
-  public get answerType(): QuestionAnswerType{
+  public get answerType(): QuestionAnswerType {
     return this._answerType
   }
-  public get answerGroup(): { answer: string, variant: string }[] {
+
+  public get answerGroup(): AnswerGroupItem[] {
     return this._answerGroup
   }
 
-  // eslint-disable-next-line @typescript-eslint/member-ordering
-  private _eventEmitter: EventEmitter
-
-  public open() {
-    if (!this.isClose) {
-      return
-    }
-
+  // back to the first page (opening, repeating or cancelling the question)
+  public restart(): void {
     this._pageIndex = 0
-
-    console.log('open question')
-    this._eventEmitter.emit(GameEvent.OpenQuestion, this)
   }
 
-  public close() {
-    if (!this.isClose) {
-      return
-    }
-
+  public markPlayed(): void {
     this._pageIndex = 0
-    this._isClose = false
-
-    console.log('close question')
-    this._eventEmitter.emit(GameEvent.CloseQuestion)
+    this._isAvailable = false
   }
 
-  public goToAnswer() {
-    if (this._pages) {
-      this._pageIndex = this._pages.length - 1
-      this._eventEmitter.emit(GameEvent.UpdatePage)
-    }
-  }
-
-  public enter() {
-    if (!this._pages) {
-      this.close()
-      return
-    }
-
-    if (this._pages.length > this._pageIndex + 1) {
+  // false when the current page is the last one
+  public goToNextPage(): boolean {
+    if (this._pageIndex + 1 < this.pagesCount) {
       this._pageIndex += 1
-      this._eventEmitter.emit(GameEvent.UpdatePage)
-    } else {
-      this.close()
-    }
-  }
-
-  public back() {
-    if (this.isClose) {
-      return
+      return true
     }
 
-    this._isClose = true
+    return false
   }
 
-  private autoClose() {
-    if (this._pages) {
-      for (const page of this._pages) {
-        if (page.video) {
-          this.close()
+  // Jump to the first page of the answer (the marker page; the answer may take several pages, the host goes through
+  // them with next). Nothing changes while the answer is already shown. false when the page did not change.
+  public goToAnswer(): boolean {
+    const markerIndex = this._pages?.findIndex(page => page.isMarker) ?? -1
+    const answerIndex = markerIndex >= 0 ? markerIndex : this.pagesCount - 1
+    if (answerIndex <= this._pageIndex) {
+      return false
+    }
+
+    this._pageIndex = answerIndex
+    return true
+  }
+
+  private parseAnswerGroup(params: Param[]): void {
+    for (const param of params) {
+      if (param.attributes?.type !== 'group') {
+        continue
+      }
+
+      for (const element of toArray(param.param)) {
+        const variant = isObject(element) ? textOf(element.attributes?.name) : null
+        const answer = isObject(element) ? this.parseAnswerGroupItem(element.item) : null
+        if (variant === null || answer === null) {
+          console.warn(`Вопрос "${this._themeName}" (${this.price}): пропущен некорректный вариант ответа`)
+          continue
         }
 
-        if (page.voice) {
-          this.close()
-        }
+        this._answerGroup.push({ answer, variant })
       }
     }
-  }
 
-  private parseType(value: string | undefined): QuestionType {
-    switch (value) {
-      case 'stake': return QuestionType.STAKE
-      case 'secret': return QuestionType.SECRET
-      case 'secretPublicPrice': return QuestionType.SECRET_PUBLIC_PRICE
-      case 'secretNoQuestion': return QuestionType.SECRET_NO_QUESTION
-      case 'noRisk': return QuestionType.NO_RISC
-      case 'default': return QuestionType.DEFAULT
-      default: return QuestionType.DEFAULT
+    if (this._answerGroup.length > 0) {
+      this._answerType = QuestionAnswerType.Group
     }
   }
 
-  private parseAnswerGroup(questionData: SIQ.Content.Package.Round.Theme.Question): void {
-    if(Array.isArray(questionData.params?.param))
-      for (const param of questionData.params?.param) {
-        if(param.attributes.type === 'group'){
-          this._answerType = QuestionAnswerType.Group
-          for (const element of param.param) { 
-            this._answerGroup.push({
-              answer: element.item,
-              variant: element.attributes.name,
-            })
+  private parseAnswerGroupItem(value: Param['item']): AnswerGroupItem['answer'] | null {
+    const item = toArray(value)[0]
+    const text = textOf(item)
+    if (text === null) {
+      return null
+    }
+
+    // an image option is sent as { '#text': <file> }, a text option as a plain string
+    return isObject(item) && item.attributes?.type === 'image' ? { '#text': text } : text
+  }
+
+  private parseParams(params: Param[]) {
+    const pageBuilder = new PageBuilder()
+    let answer: Param | null = null
+    for (const param of params) {
+      const name = param.attributes?.name ?? ''
+      if (param.attributes?.type === 'group') {
+        // answer options, see parseAnswerGroup
+        continue
+      }
+
+      switch (name) {
+        case 'theme': {
+          this._themeName = textOf(param['#text']) ?? this._themeName
+          break
+        }
+
+        case 'question': {
+          this.fillPages(param.item, pageBuilder)
+          break
+        }
+
+        case 'answer': {
+          if (answer !== null) {
+            console.warn(`Вопрос "${this._themeName}" (${this.price}): несколько параметров answer, используется последний`)
+          }
+
+          answer = param
+          break
+        }
+
+        case 'selectionMode': {
+          this._selectionMode = textOf(param['#text']) === SelectionModeType.EXCEPT_CURRENT
+            ? SelectionModeType.EXCEPT_CURRENT
+            : SelectionModeType.ANY
+          break
+        }
+
+        case 'price': {
+          this._selectPrice = this.parseNumberSet(param) ?? this._selectPrice
+          break
+        }
+
+        default: {
+          if (!passiveParams.has(name)) {
+            console.warn(`Вопрос "${this._themeName}" (${this.price}): неизвестный параметр "${name}"`)
           }
         }
       }
+    }
+
+    const answerParam: Param | null = answer
+    this.finishPages(pageBuilder, answerParam ? () => this.fillPages(answerParam.item, pageBuilder) : null)
   }
 
-  // eslint-disable-next-line complexity
-  private parseParams(params: Array<{ ['#text']?: string; item?: any[] | any; numberSet?: { attributes: { minimum: string; maximum: string; step: string } }; attributes: { name: string } }>) {
-    const pageBuilder = new PageBuilder()
-    let answer: any = null
-    for (const param of params) {
-      if (param.attributes.name === 'theme') {
-        this._themeName = param['#text']!
-      } else if (param.attributes.name === 'question') {
-        this.fillPages(param.item, pageBuilder)
-      } else if (param.attributes.name === 'answer') {
-        if (answer !== null) {
-          console.warn('parseParams, answer is exist')
+  private parseNumberSet(param: Param): SelectPrice | null {
+    const attributes = param.numberSet?.attributes
+    if (!attributes) {
+      return null
+    }
+
+    const minimum = numberOf(attributes.minimum) ?? 0
+    const maximum = numberOf(attributes.maximum) ?? 0
+    const step = numberOf(attributes.step) ?? 0
+
+    let type = CostType.MIN_OR_MAX_IN_ROUND
+    if (maximum === 0 && minimum === 0 && step === 0) {
+      type = CostType.MIN_OR_MAX_IN_ROUND
+    } else if (maximum === minimum && step === 0) {
+      type = CostType.ACCURATE
+    } else if (maximum > 0 && minimum > 0 && step === 0) {
+      type = CostType.BETWEEN
+    } else if (maximum > 0 && minimum > 0 && step > 0) {
+      type = CostType.STEP
+    }
+
+    return { minimum, maximum, step, type }
+  }
+
+  // SIQ 4 <type name="..."><param name="theme|cost|self|knows">
+  private parseTypeParams(type: NonNullable<QuestionData['type']>) {
+    for (const param of toArray(type.param)) {
+      if (!isObject(param)) {
+        continue
+      }
+
+      const value = textOf(param['#text'])
+      switch (param.attributes?.name) {
+        case 'theme': {
+          if (value) {
+            this._themeName = value
+          }
+
+          break
         }
 
-        answer = param
-      } else if (param.attributes.name === 'selectionMode') {
-        this._selectionMode = param['#text'] === 'exceptCurrent' ? SelectionModeType.EXCEPT_CURRENT : SelectionModeType.ANY
-      } else if (param.attributes.name === 'price') {
-        let type = CostType.MIN_OR_MAX_IN_ROUND
-        if ((+param.numberSet!.attributes.maximum === 0 && +param.numberSet!.attributes.minimum === 0 && +param.numberSet!.attributes.step === 0)) {
-          type = CostType.MIN_OR_MAX_IN_ROUND
-        } else if (+param.numberSet!.attributes.maximum === +param.numberSet!.attributes.minimum && +param.numberSet!.attributes.step === 0) {
-          type = CostType.ACCURATE
-        } else if (+param.numberSet!.attributes.maximum > 0 && +param.numberSet!.attributes.minimum > 0 && +param.numberSet!.attributes.step === 0) {
-          type = CostType.BETWEEN
-        } else if (+param.numberSet!.attributes.maximum > 0 && +param.numberSet!.attributes.minimum > 0 && +param.numberSet!.attributes.step > 0) {
-          type = CostType.STEP
+        case 'cost': {
+          const cost = numberOf(value)
+          if (cost !== null && cost > 0) {
+            this._selectPrice = { minimum: cost, maximum: cost, step: 0, type: CostType.ACCURATE }
+          } else if (cost === 0) {
+            // bagcat: 0 means "minimum or maximum of the round"
+            this._selectPrice = { minimum: 0, maximum: 0, step: 0, type: CostType.MIN_OR_MAX_IN_ROUND }
+          }
+
+          break
         }
 
-        this._selectPrice = {
-          maximum: +param.numberSet!.attributes.maximum,
-          minimum: +param.numberSet!.attributes.minimum,
-          step: +param.numberSet!.attributes.step,
-          type,
+        case 'self': {
+          this._selectionMode = value === 'true' ? SelectionModeType.ANY : SelectionModeType.EXCEPT_CURRENT
+          break
         }
-      } else {
-        console.warn('parseParams, params not parse')
+
+        default: {
+          break
+        }
       }
     }
 
-    pageBuilder.saveAndNextPage().setMarker(true)
-    if (answer) {
-      this.fillPages(answer.item, pageBuilder)
-    } else if (this.rightAnswer) {
-      pageBuilder.setText(this.rightAnswer[0]).saveAndNextPage()
+    if (type.attributes?.name === 'cat' && this._selectionMode === null) {
+      this._selectionMode = SelectionModeType.EXCEPT_CURRENT
+    }
+  }
+
+  // SIQ 4 <scenario><atom type="...">: each atom is a page, 'marker' separates the question from the answer
+  private parseScenario(atoms: ScenarioAtom[]) {
+    const pageBuilder = new PageBuilder()
+    let hasMarker = false
+    let answerItems = 0
+    for (const atom of atoms) {
+      const type = (isObject(atom) ? atom.attributes?.type : undefined) ?? 'text'
+      if (type === 'marker') {
+        if (!hasMarker) {
+          hasMarker = true
+          pageBuilder.endSection().setMarker(true)
+        }
+
+        continue
+      }
+
+      const text = textOf(atom)
+      if (text === null || text === '') {
+        continue
+      }
+
+      if (type === 'say') {
+        // a replic is attached to the next page of the question / answer, or gets a page of its own
+        pageBuilder.setReplic(text)
+        continue
+      }
+
+      switch (type) {
+        case 'image': {
+          pageBuilder.setImage(mediaRef(text))
+          break
+        }
+
+        case 'voice':
+        case 'audio': {
+          pageBuilder.setVoice(mediaRef(text))
+          break
+        }
+
+        case 'video': {
+          pageBuilder.setVideo(mediaRef(text))
+          break
+        }
+
+        case 'html': {
+          pageBuilder.setHtml(mediaRef(text))
+          break
+        }
+
+        case 'text': {
+          pageBuilder.setText(text)
+          break
+        }
+
+        default: {
+          console.warn(`Вопрос "${this._themeName}" (${this.price}): неизвестный тип atom "${type}"`)
+          continue
+        }
+      }
+
+      if (hasMarker) {
+        answerItems += 1
+      }
+
+      pageBuilder.saveAndNextPage()
+    }
+
+    if (!hasMarker) {
+      this.finishPages(pageBuilder, null)
+      return
+    }
+
+    if (answerItems === 0 && this.rightAnswer) {
+      pageBuilder.setText(this.rightAnswer[0])
     }
 
     this._pages = pageBuilder.finish()
   }
 
-  private fillPages(data: unknown | unknown[], pageBuilder: PageBuilder): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const items: ParamItem[] = Array.isArray(data) ? data : [data]
-    for (const item of items) {
-      if (typeof item === 'string' || typeof item === 'number') {
-        pageBuilder.setText(item).saveAndNextPage()
-      } else {
-        let isText = true
-        if (item.attributes.placement === 'replic') {
-          isText = false
-          pageBuilder.setReplic(item['#text'])
-          console.log(items)
+  // Marker page + answer: the answer content when given, otherwise the first right answer.
+  // The marker flag is set on the first page of the answer.
+  private finishPages(pageBuilder: PageBuilder, fillAnswer: (() => number) | null) {
+    pageBuilder.endSection().setMarker(true)
+    const answerItems = fillAnswer ? fillAnswer() : 0
+    if (answerItems === 0 && this.rightAnswer) {
+      pageBuilder.setText(this.rightAnswer[0])
+    }
+
+    this._pages = pageBuilder.finish()
+  }
+
+  // SIQ 5 content items; returns the number of items that produce visible content
+  private fillPages(data: Param['item'], pageBuilder: PageBuilder): number {
+    let count = 0
+    for (const item of toArray<ContentItem>(data)) {
+      const text = textOf(item)
+      if (text === null || text === '') {
+        continue
+      }
+
+      const attributes = isObject(item) ? item.attributes ?? {} : {}
+      if (attributes.placement === 'replic') {
+        // a replic is attached to the next page of the question / answer, or gets a page of its own
+        pageBuilder.setReplic(text)
+        continue
+      }
+
+      switch (attributes.type) {
+        case 'image': {
+          pageBuilder.setImage(text)
+          break
         }
 
-        if (item.attributes.type === 'audio') {
-          isText = false
-          pageBuilder.setVoice(item['#text'])
+        case 'audio':
+        case 'voice': {
+          pageBuilder.setVoice(text)
+          break
         }
 
-        if (item.attributes.type === 'video') {
-          isText = false
-          pageBuilder.setVideo(item['#text'])
+        case 'video': {
+          pageBuilder.setVideo(text)
+          break
         }
 
-        if (item.attributes.type === 'image') {
-          isText = false
-          pageBuilder.setImage(item['#text'])
+        case 'html': {
+          pageBuilder.setHtml(text)
+          break
         }
 
-        if (item.attributes.type === 'html') {
-          isText = false
-          pageBuilder.setHtml(item['#text'])
-        }
-
-        if (isText) {
-          pageBuilder.setText(item['#text'])
-        }
-
-        if (item.attributes.waitForFinish === undefined) {
-          pageBuilder.saveAndNextPage()
+        default: {
+          pageBuilder.setText(text)
         }
       }
+
+      count += 1
+      // waitForFinish set → the item is shown together with the next one
+      if (attributes.waitForFinish === undefined) {
+        pageBuilder.saveAndNextPage()
+      }
     }
+
+    return count
   }
 }
-

@@ -1,9 +1,8 @@
 import type * as SocketIO from 'socket.io'
-import { type DefaultEventsMap } from 'socket.io/dist/typed-events'
 import { type Dao } from '../../types'
 
 export class Socket {
-  constructor(private readonly socket: SocketIO.Socket<DefaultEventsMap, DefaultEventsMap>) {}
+  constructor(private readonly socket: SocketIO.Socket) {}
 
   public get id() {
     return this.socket.id
@@ -13,18 +12,13 @@ export class Socket {
     return this.socket
   }
 
-  public async send(dao: Dao) {
-    return this.socket.emit(dao.type, dao.payload)
+  // auth.token sent by the client on connection (socket.io `auth` option)
+  public get authToken(): unknown {
+    const { auth } = this.socket.handshake as { auth: unknown }
+    return typeof auth === 'object' && auth !== null ? (auth as Record<string, unknown>).token : undefined
   }
 
-  public async sendToAll(dao: Dao) {
-    return Promise.all([
-      this.socket.emit(dao.type, dao.payload),
-      this.socket.broadcast.emit(dao.type, dao.payload),
-    ])
-  }
-
-  public async sendToOther(dao: Dao) {
-    return this.socket.broadcast.emit(dao.type, dao.payload)
+  public send(dao: Dao): void {
+    this.socket.emit(dao.type, dao.payload)
   }
 }

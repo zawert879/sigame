@@ -1,2 +1,4 @@
-/test
 /dist
+# runtime data (extracted packs, uploaded .siq files)
+/siq
+/packages

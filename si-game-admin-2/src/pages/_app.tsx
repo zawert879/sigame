@@ -1,24 +1,18 @@
 import '../styles/globals.css'
-import React, { memo, useEffect } from 'react'
-import { ConfigProvider } from 'antd/lib'
+import React, { memo } from 'react'
+import { ConfigProvider } from 'antd'
 import type { AppProps } from 'next/app'
 
 import theme from '../theme/themeConfig'
-import { client } from '@/client'
 import { KeyPressProvider } from '@/hooks/useKeyPress'
 import { SoundProvider } from '@/hooks/useSound'
+import { MessageHolder } from '@/utils/notify'
 
 // eslint-disable-next-line react/display-name
 const App = memo(({ Component, pageProps }: AppProps) => {
-  // const { updatePlayersFromServer } = usePlayersStore()
-  // const { setScore } = useRewardStore()
-
-  useEffect(() => {
-    client.handshake()
-  }, [])
-
   return (
     <ConfigProvider theme={theme}>
+      <MessageHolder />
       <SoundProvider>
         <KeyPressProvider>
           <Component {...pageProps} />

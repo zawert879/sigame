@@ -1,8 +1,6 @@
 import os from 'os'
 import qrcode from 'qrcode-terminal'
 
-const PORT = 4000
-
 type LanCandidate = {
   address: string;
   name: string;
@@ -77,30 +75,52 @@ const getLanCandidates = (): LanCandidate[] => {
   return candidates.sort((a, b) => b.score - a.score)
 }
 
-export const printStartupBanner = (gameId: string) => {
+// The QR opens '/', which redirects to the first game, so it stays valid after «Выход» recreates the game.
+// With an admin token the link carries it: the device that opens it gets admin rights.
+// siqDir: where the uploaded packs are stored (it is not the working directory of the desktop build).
+export const printStartupBanner = (port: number, adminToken: string | null, siqDir: string) => {
   const lanIp = getLanCandidates()[0]?.address ?? null
-  const qrHost = lanIp ?? '127.0.0.1'
-  const qrUrl = `http://${qrHost}:${PORT}/player/${gameId}`
+  const host = lanIp ?? '127.0.0.1'
+  const tokenQuery = adminToken ? `?token=${encodeURIComponent(adminToken)}` : ''
+  const qrUrl = `http://${host}:${port}/${tokenQuery}`
 
   console.log('')
   console.log('SI Game запущена')
-  console.log(`Порт: ${PORT}`)
+  console.log(`Порт: ${port}`)
+  console.log(adminToken ? 'Управление игрой: только с admin-токеном (ADMIN_TOKEN)' : 'Управление игрой: открыто для всех в сети')
+  console.log(`Паки: ${siqDir}`)
   console.log('')
 
   if (lanIp) {
-    console.log(`Ссылка для локальной сети: http://${lanIp}:${PORT}`)
-    console.log('QR для экрана игрока. Телефон/планшет должен быть в той же Wi-Fi/LAN сети:')
+    console.log(`Ссылка для локальной сети: ${qrUrl}`)
+    console.log('QR для подключения устройства. Телефон/планшет должен быть в той же Wi-Fi/LAN сети:')
   } else {
-    console.log('Адрес локальной сети не найден. QR работает только на этом компьютере:')
+    console.log(`Адрес локальной сети не найден. Ссылка работает только на этом компьютере: ${qrUrl}`)
   }
 
   qrcode.generate(qrUrl, { small: true })
+
+  if (adminToken) {
+    console.log('Ссылка и QR содержат admin-токен — не показывай их игрокам.')
+  }
 
   console.log('')
   console.log('Краткая инструкция:')
   console.log('  1. Не закрывай это окно во время игры.')
   console.log('  2. Отсканируй QR на устройстве для показа игры.')
   console.log('  3. Для управления открой админку из интерфейса игры.')
-  console.log('  4. Если другое устройство не подключается, разреши приложение в Windows Firewall.')
+  console.log(`  4. Если другое устройство не подключается, ${firewallHint()}`)
   console.log('')
+}
+
+const firewallHint = (): string => {
+  if (process.platform === 'darwin') {
+    return 'разреши входящие подключения для sigame: Системные настройки → Сеть → Файрвол.'
+  }
+
+  if (process.platform === 'win32') {
+    return 'разреши приложение в Windows Firewall.'
+  }
+
+  return 'проверь, что файрвол пропускает входящие подключения на этот порт.'
 }

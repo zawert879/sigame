@@ -1,5 +1,5 @@
 import { useKeyPress } from "@/hooks/useKeyPress";
-import {InputNumber as InputNumberAnt} from "antd/lib";
+import {InputNumber as InputNumberAnt} from "antd";
 import React, { useCallback } from "react";
 
 export const InputNumber: React.FC<React.ComponentProps<typeof InputNumberAnt>> = (props) => {

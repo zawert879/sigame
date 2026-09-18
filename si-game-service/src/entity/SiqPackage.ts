@@ -1,18 +1,62 @@
-import * as SIQ from '../serverTypes'
-import { Round } from './Round'
-
-import * as Data from '../data'
-import type * as ServerTypes from '../serverTypes'
-import fsSync from 'fs'
+import type AdmZip from 'adm-zip'
 import fs from 'fs/promises'
 import path from 'path'
-import { GameContainer } from '../types'
-import { GameEvent } from '../events'
-import EventEmitter from 'eventemitter3'
-import { bind } from 'bind-decorator'
-import { Question } from './Question'
-import iconv from 'iconv-lite'
+import { type Data } from '../serverTypes'
+import { type GameProgress } from '../types'
+import { isInsideDir, safeDecodeUriComponent } from '../utils/paths'
+import { textList, textOf, toArray } from '../utils/siqValue'
+import { Round } from './Round'
+import type { Question } from './Question'
+
+const assetFolders: Array<[folder: 'Images' | 'Audio' | 'Video', key: 'images' | 'audios' | 'videos']> = [
+  ['Images', 'images'],
+  ['Audio', 'audios'],
+  ['Video', 'videos'],
+]
+
+// how many asset files are decompressed and written at the same time
+const WRITE_CONCURRENCY = 8
+
 export class SiqPackage {
+  // Writes the pack media to <packDir>/<Images|Audio|Video>/<decoded entry name>.
+  // Entries that would land outside packDir are skipped; a failed file is logged, never thrown.
+  static async saveAssets(siq: Data, packDir: string): Promise<void> {
+    const root = path.resolve(packDir)
+    const jobs: Array<{ entry: AdmZip.IZipEntry; target: string }> = []
+    for (const [folder, key] of assetFolders) {
+      for (const entry of siq[key].values()) {
+        const name = safeDecodeUriComponent(entry.entryName.slice(folder.length + 1))
+        const target = path.resolve(root, folder, name)
+        if (!isInsideDir(root, target)) {
+          console.warn(`Пропущен файл пака вне каталога игры: ${entry.entryName}`)
+          continue
+        }
+
+        jobs.push({ entry, target })
+      }
+    }
+
+    await fs.mkdir(root, { recursive: true })
+
+    let next = 0
+    const worker = async () => {
+      while (next < jobs.length) {
+        const { entry, target } = jobs[next]
+        next += 1
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await fs.mkdir(path.dirname(target), { recursive: true })
+          // eslint-disable-next-line no-await-in-loop
+          await fs.writeFile(target, entry.getData())
+        } catch (error) {
+          console.error(`Не удалось распаковать ${entry.entryName}:`, error)
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(WRITE_CONCURRENCY, jobs.length) }, async () => worker()))
+  }
+
   readonly rounds: Round[]
   readonly tags: string[]
   readonly authors: string | null
@@ -30,7 +74,32 @@ export class SiqPackage {
 
   private _roundIndex = 0
   private _currentQuestion: Question | null = null
-  private _eventEmitter: EventEmitter
+
+  constructor(siq: Pick<Data, 'content'>) {
+    const siqPackage = siq.content.package ?? {}
+    const attributes = siqPackage.attributes ?? {}
+
+    this.tags = textList(siqPackage.tags?.tag)
+    this.comments = textOf(siqPackage.info?.comments)
+    this.authors = textOf(siqPackage.info?.authors?.author)
+    this.name = textOf(attributes.name)
+    this.version = textOf(attributes.version)
+    this.id = textOf(attributes.id)
+    this.restriction = textOf(attributes.restriction)
+    this.date = textOf(attributes.date)
+    this.publisher = textOf(attributes.publisher)
+    this.difficulty = textOf(attributes.difficulty)
+    this.logo = textOf(attributes.logo)
+    this.language = textOf(attributes.language)
+    this.xmlns = textOf(attributes.xmlns)
+
+    this.rounds = toArray(siqPackage.rounds?.round)
+      .filter(round => typeof round === 'object' && round !== null)
+      .map(round => new Round(round))
+    if (this.rounds.length === 0) {
+      throw new Error('В паке нет ни одного раунда')
+    }
+  }
 
   public get currentQuestion(): Question | null {
     return this._currentQuestion
@@ -40,116 +109,55 @@ export class SiqPackage {
     return this._roundIndex
   }
 
-  constructor(siq: SIQ.Data, gameContainer: GameContainer) {
-    const siqContent = siq.content
-    this._eventEmitter = gameContainer.eventEmitter
-    this.tags = siqContent.package.tags ? siqContent.package.tags.tag : []
-
-    this.comments = siqContent.package.info.comments ?? null
-    this.authors = siqContent.package.info.authors?.author ?? null
-
-    this.rounds = Array.isArray(siqContent.package.rounds.round)
-      ? siqContent.package.rounds.round.map(round => new Round(round, gameContainer))
-      : [new Round(siqContent.package.rounds.round, gameContainer)]
-    this.name = siqContent.package.attributes.name ?? null
-    this.version = siqContent.package.attributes.version ?? null
-    this.id = siqContent.package.attributes.id ?? null
-    this.restriction = siqContent.package.attributes.restriction ?? null
-    this.date = siqContent.package.attributes.date ?? null
-    this.publisher = siqContent.package.attributes.publisher ?? null
-    this.difficulty = siqContent.package.attributes.difficulty ?? null
-    this.logo = siqContent.package.attributes.logo ?? null
-    this.language = siqContent.package.attributes.language ?? null
-    this.xmlns = siqContent.package.attributes.xmlns ?? null
-
-    void this.saveAssets(siq, gameContainer.id)
-    this._eventEmitter.emit(GameEvent.StartScreensaver)
-    this.sub()
-  }
-
-  public closeGame() {
-    this.unSub()
-  }
-
-  public getCurrentRound() {
+  public get currentRound(): Round {
     return this.rounds[this._roundIndex]
   }
 
-  public nextRound() {
-    if (this.rounds.length > this._roundIndex + 1) {
-      this._roundIndex += 1
-      this._eventEmitter.emit(GameEvent.NextRound)
+  public get isLastRound(): boolean {
+    return this._roundIndex >= this.rounds.length - 1
+  }
+
+  public get progress(): GameProgress {
+    const { questions } = this.currentRound
+    return {
+      roundIndex: this._roundIndex,
+      roundsCount: this.rounds.length,
+      questionsPlayed: questions.filter(question => !question.isAvailable).length,
+      questionsTotal: questions.length,
     }
   }
 
-  public previousRound() {
-    if (this._roundIndex - 1 < 0) {
-      this._roundIndex = 0
-      this._eventEmitter.emit(GameEvent.PreviousRound)
-      return
-    }
-
-    this._roundIndex -= 1
-    this._eventEmitter.emit(GameEvent.PreviousRound)
+  public getCurrentRound(): Round {
+    return this.currentRound
   }
 
-  @bind
-  private onOpenQuestion(question: Question) {
+  public getAllThemes(): string[] {
+    return this.rounds.flatMap(round => round.themes.map(theme => theme.name))
+  }
+
+  public setCurrentQuestion(question: Question | null): void {
     this._currentQuestion = question
   }
 
-  @bind
-  private onCloseQuestion() {
+  // false on the last round
+  public nextRound(): boolean {
+    if (this.isLastRound) {
+      return false
+    }
+
+    this._roundIndex += 1
     this._currentQuestion = null
-    let isCloseAllQuestions = true
-    for (const [_, question] of this.getCurrentRound().questionById) {
-      if (question.isClose) {
-        isCloseAllQuestions = false
-        break
-      }
-    }
-
-    if (isCloseAllQuestions) {
-      this._eventEmitter.emit(GameEvent.StartResultsOnCloseAllQuestions)
-    }
+    return true
   }
 
-  private sub() {
-    this._eventEmitter.on(GameEvent.OpenQuestion, this.onOpenQuestion)
-    this._eventEmitter.on(GameEvent.CloseQuestion, this.onCloseQuestion)
+  // stays on the first round when there is no previous one
+  public previousRound(): void {
+    this._roundIndex = Math.max(0, this._roundIndex - 1)
+    this._currentQuestion = null
   }
 
-  private unSub() {
-    this._eventEmitter.off(GameEvent.OpenQuestion, this.onOpenQuestion)
-    this._eventEmitter.off(GameEvent.CloseQuestion, this.onCloseQuestion)
-  }
-
-  private async saveAssets(siq: ServerTypes.Data, id: string) {
-    if (!fsSync.existsSync(Data.packagesDir)) {
-      await fs.mkdir(Data.packagesDir)
-    }
-
-    const packDir = path.join(Data.packagesDir, id)
-    await fs.mkdir(path.join(packDir, 'Images'), {
-      recursive: true,
-    })
-    await fs.mkdir(path.join(packDir, 'Audio'), {
-      recursive: true,
-    })
-    await fs.mkdir(path.join(packDir, 'Video'), {
-      recursive: true,
-    })
-
-    siq.images.forEach(async file => {
-      await fs.writeFile(path.join(packDir, decodeURIComponent(file.entryName)), file.getData())
-    })
-
-    siq.audios.forEach(async file => {
-      await fs.writeFile(path.join(packDir, decodeURIComponent(file.entryName)), file.getData())
-    })
-
-    siq.videos.forEach(async file => {
-      await fs.writeFile(path.join(packDir, decodeURIComponent(file.entryName)), file.getData())
-    })
+  // called when the pack is replaced or the game is closed
+  public close(): void {
+    this._currentQuestion = null
   }
 }

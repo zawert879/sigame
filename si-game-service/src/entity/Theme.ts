@@ -1,5 +1,5 @@
 import { type SIQ } from '../serverTypes'
-import { type GameContainer } from '../types'
+import { textOf, toArray } from '../utils/siqValue'
 import { Question } from './Question'
 
 export class Theme {
@@ -8,15 +8,17 @@ export class Theme {
   readonly authors: string | null
   readonly name: string
 
-  constructor(theme: SIQ.Content.Package.Round.Theme, gameContainer: GameContainer) {
-    this.comments = theme.info?.comments ?? null
-    this.authors = theme.info?.authors?.author ?? null
-    this.name = theme.attributes.name
+  constructor(theme: SIQ.Content.Package.Round.Theme) {
+    this.comments = textOf(theme.info?.comments)
+    this.authors = textOf(theme.info?.authors?.author)
+    this.name = textOf(theme.attributes?.name) ?? ''
 
-    this.questions = Array.isArray(theme.questions.question)
-      ? theme.questions.question.map(question =>
-        new Question(question, this.name, gameContainer),
-      )
-      : [new Question(theme.questions.question, this.name, gameContainer)]
+    this.questions = toArray(theme.questions?.question)
+      .filter(question => typeof question === 'object' && question !== null)
+      .map(question => new Question(question, this.name))
+  }
+
+  public get hasAvailableQuestions(): boolean {
+    return this.questions.some(question => question.isAvailable)
   }
 }

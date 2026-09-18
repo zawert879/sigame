@@ -1,9 +1,7 @@
-
-/* eslint-disable @typescript-eslint/no-namespace */
-
 import type AdmZip from 'adm-zip'
-import { type Context } from 'koa'
+import type { OneOrMany } from './utils/siqValue'
 
+// A parsed .siq archive. Asset maps are keyed by '@<entry name without the folder>'.
 export type Data = {
   texts: Map<string, AdmZip.IZipEntry>;
   images: Map<string, AdmZip.IZipEntry>;
@@ -11,21 +9,31 @@ export type Data = {
   videos: Map<string, AdmZip.IZipEntry>;
   content: SIQ.Content;
 }
-export namespace SIQ {
+
+// Raw structure of content.xml as produced by fast-xml-parser
+// (attributes in `attributes`, text of an element with attributes in '#text', single elements are not arrays,
+// empty elements are ''). Covers SIQ 5 (`params`) and SIQ 4 (`type` + `scenario`).
+// Types only, hence `declare`: the namespaces group the element types and emit no code.
+export declare namespace SIQ {
+  export type Text = string | {
+    '#text'?: string;
+    attributes?: Record<string, string>;
+  }
+
   export type Content = {
-    package: Content.Package;
+    package?: Content.Package;
   }
 
   export namespace Content {
     export type Package = {
-      tags: {
-        tag: string[];
+      tags?: {
+        tag?: OneOrMany<Text>;
       };
-      info: Package.Info;
-      rounds: {
-        round: Package.Round[] | Package.Round;
+      info?: Package.Info;
+      rounds?: {
+        round?: OneOrMany<Package.Round>;
       };
-      attributes: {
+      attributes?: {
         name?: string;
         version?: string;
         id?: string;
@@ -38,106 +46,125 @@ export namespace SIQ {
         xmlns?: string;
       };
     }
+
     export namespace Package {
-      export enum RoundType {
-        FINAL = 'final',
+      export type Info = {
+        authors?: {
+          author?: OneOrMany<Text>;
+        };
+        sources?: {
+          source?: OneOrMany<Text>;
+        };
+        comments?: Text;
       }
+
       export type Round = {
-        info?: {
-          sources?: {
-            source: string;
-          };
-          comments: string;
+        info?: Info;
+        themes?: {
+          theme?: OneOrMany<Round.Theme>;
         };
-        themes: {
-          theme: Round.Theme[];
-        };
-        attributes: {
-          name: string;
-          type?: RoundType;
+        attributes?: {
+          name?: string;
+          // 'final' for the final round, anything else is a regular round
+          type?: string;
         };
       }
+
       export namespace Round {
         export type Theme = {
           info?: Info;
-          questions: {
-            question: Theme.Question[] | Theme.Question;
+          questions?: {
+            question?: OneOrMany<Theme.Question>;
           };
-          attributes: {
-            name: string;
+          attributes?: {
+            name?: string;
           };
         }
+
         export namespace Theme {
           export type Question = {
             info?: Info;
-            params?: { param: any };
+            // SIQ 5
+            params?: {
+              param?: OneOrMany<Question.Param>;
+            };
+            // SIQ 4
+            type?: Question.Type;
+            scenario?: {
+              atom?: OneOrMany<Question.ScenarioAtom>;
+            };
             right?: {
-              answer: string;
+              answer?: OneOrMany<Text>;
             };
             wrong?: {
-              answer: string;
+              answer?: OneOrMany<Text>;
             };
-            attributes: { price: string; type?: 'stake' | 'secret' | 'secretPublicPrice' | 'secretNoQuestion' | 'noRisk' };
+            attributes?: {
+              price?: string;
+              // SIQ 5 question type: stake | secret | secretPublicPrice | secretNoQuestion | noRisk | simple | ...
+              type?: string;
+            };
           }
+
           export namespace Question {
-            export enum QuestionType {
-              STAKE = 'stake',
-              SECRET = 'secret',
-              SECRET_PUBLIC_PRICE = 'secretPublicPrice',
-              SECRET_NO_QUESTION = 'secretNoQuestion',
-              NO_RISK = 'noRisk',
-              BAG_CAT = 'bagcat',
-              AUCTION = 'auction',
-              SPONSORED = 'sponsored',
-            }
-            export type ScenarioAtom = {
+            // SIQ 5 <param>. Content params hold `item`s, a group param (type="group") holds nested params.
+            export type Param = {
               '#text'?: string;
-              attributes: {
-                type?: ScenarioAtom.ScenarioAtomType;
+              item?: OneOrMany<ContentItem>;
+              param?: OneOrMany<Param>;
+              numberSet?: {
+                attributes?: {
+                  minimum?: string;
+                  maximum?: string;
+                  step?: string;
+                };
+              };
+              attributes?: {
+                name?: string;
+                type?: string;
+              };
+            }
+
+            // SIQ 5 content <item>
+            export type ContentItem = string | {
+              '#text'?: string;
+              attributes?: {
+                type?: string; // text | image | audio | video | html
+                isRef?: string;
+                waitForFinish?: string;
+                placement?: string; // screen | replic | background
+                duration?: string;
+              };
+            }
+
+            // SIQ 4 <atom>
+            export type ScenarioAtom = string | {
+              '#text'?: string;
+              attributes?: {
+                type?: string; // text | say | image | voice | video | html | marker
                 time?: string;
               };
             }
-            export namespace ScenarioAtom {
-              export enum ScenarioAtomType {
-                IMAGE = 'image',
-                VIDEO = 'video',
-                VOICE = 'voice',
-                HTML = 'html',
-                MARKER = 'marker',
-              }
-            }
+
+            // SIQ 4 <type name="cat|bagcat|auction|sponsored|simple">
             export type Type = {
-              param?: Type.Param[];
-              attributes: { name: string };
+              param?: OneOrMany<Type.Param>;
+              attributes?: {
+                name?: string;
+              };
             }
+
             export namespace Type {
-              export enum AttributeName {
-                THEME = 'theme',
-                COST = 'cost',
-                SELF = 'self',
-                KNOWS = 'knows',
-              }
-              export type Param = {
-                '#text': string | number | boolean;
-                attributes: {
-                  name: AttributeName;
+              export type Param = string | {
+                '#text'?: string;
+                attributes?: {
+                  name?: string; // theme | cost | self | knows
                 };
               }
             }
           }
         }
       }
-      export type Info = {
-        authors?: {
-          author: string;
-        };
-        comments: string;
-      }
     }
   }
-}
-
-export type MyContext = Context & {
-  appState: {
-  };
 }

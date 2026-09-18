@@ -1,4 +1,5 @@
 import { serverUrl } from "@/config"
 import { Manager } from "socket.io-client"
 
-export const manager = serverUrl ? new Manager(serverUrl) : new Manager()
+// No connection attempts while the static export is prerendered.
+export const manager = new Manager(serverUrl || undefined, { autoConnect: typeof window !== 'undefined' })

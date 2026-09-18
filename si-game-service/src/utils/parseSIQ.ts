@@ -1,69 +1,75 @@
 import AdmZip from 'adm-zip'
+import path from 'path'
 import { XMLParser } from 'fast-xml-parser'
-import { type Data } from '../serverTypes'
+import { type Data, type SIQ } from '../serverTypes'
+import { textOf } from './siqValue'
 
-// eslint-disable-next-line @typescript-eslint/naming-convention
-export function parseSIQ(path: string): Data {
-  const data = {
-    texts: new Map<string, AdmZip.IZipEntry>(),
-    images: new Map<string, AdmZip.IZipEntry>(),
-    audios: new Map<string, AdmZip.IZipEntry>(),
-    videos: new Map<string, AdmZip.IZipEntry>(),
-    content: null,
+const CONTENT_FILE = 'content.xml'
+
+const assetFolders: Array<[prefix: string, key: 'images' | 'audios' | 'videos' | 'texts']> = [
+  ['Images/', 'images'],
+  ['Audio/', 'audios'],
+  ['Video/', 'videos'],
+  ['Texts/', 'texts'],
+]
+
+const createXmlParser = () => new XMLParser({
+  ignoreAttributes: false,
+  attributesGroupName: 'attributes',
+  attributeNamePrefix: '',
+  // keep texts as strings: '007' must not become 7 (audit B10)
+  parseTagValue: false,
+})
+
+function parseContent(entry: AdmZip.IZipEntry, filePath: string): SIQ.Content {
+  const text = entry.getData().toString('utf8').replace(/^\uFEFF/, '')
+  const content = createXmlParser().parse(text, true) as SIQ.Content | undefined
+  if (!content?.package || typeof content.package !== 'object') {
+    throw new Error(`Пак ${path.basename(filePath)}: в content.xml нет элемента package`)
   }
 
-  const xmlParser = new XMLParser({
-    ignoreAttributes: false,
-    attributesGroupName: 'attributes',
-    attributeNamePrefix: '',
-  })
-  const zip = new AdmZip(path)
-  const zipEntries = zip.getEntries()
-
-  zipEntries.forEach(zipEntry => {
-    if (zipEntry.entryName.includes('Texts')) {
-      data.texts.set(zipEntry.entryName.replace('Texts/', '@'), zipEntry)
-    }
-
-    if (zipEntry.entryName.includes('Images')) {
-      data.images.set(zipEntry.entryName.replace('Images/', '@'), zipEntry)
-    }
-
-    if (zipEntry.entryName.includes('Audio')) {
-      data.audios.set(zipEntry.entryName.replace('Audio/', '@'), zipEntry)
-    }
-
-    if (zipEntry.entryName.includes('Video')) {
-      data.videos.set(zipEntry.entryName.replace('Video/', '@'), zipEntry)
-    }
-
-    if (zipEntry.entryName === 'content.xml') {
-      const text = zipEntry.getData().toString('utf8')
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data.content = xmlParser.parse(text, true)
-    }
-  })
-  return data as unknown as Data
+  return content
 }
 
+function readContentEntry(zip: AdmZip, filePath: string): AdmZip.IZipEntry {
+  const entry = zip.getEntry(CONTENT_FILE)
+  if (!entry || entry.isDirectory) {
+    throw new Error(`Пак ${path.basename(filePath)}: нет файла ${CONTENT_FILE}`)
+  }
+
+  return entry
+}
+
+// Reads a whole .siq archive. Throws when the file is not a zip or content.xml is missing/invalid.
 // eslint-disable-next-line @typescript-eslint/naming-convention
-export function parseSIQName(path: string): string {
-  const zip = new AdmZip(path)
-  const zipEntries = zip.getEntries()
+export function parseSIQ(filePath: string): Data {
+  const zip = new AdmZip(filePath)
+  const data: Data = {
+    texts: new Map(),
+    images: new Map(),
+    audios: new Map(),
+    videos: new Map(),
+    content: parseContent(readContentEntry(zip, filePath), filePath),
+  }
 
-  const xmlParser = new XMLParser({
-    ignoreAttributes: false,
-    attributesGroupName: 'attributes',
-    attributeNamePrefix: '',
-  })
-  let content: Data['content'] | undefined
-  zipEntries.forEach(zipEntry => {
-    if (zipEntry.entryName === 'content.xml') {
-      const text = zipEntry.getData().toString('utf8')
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      content = xmlParser.parse(text, true)
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) {
+      continue
     }
-  })
 
-  return content?.package.attributes.name ? content.package.attributes.name : ''
+    const folder = assetFolders.find(([prefix]) => entry.entryName.startsWith(prefix))
+    if (folder) {
+      const [prefix, key] = folder
+      data[key].set(`@${entry.entryName.slice(prefix.length)}`, entry)
+    }
+  }
+
+  return data
+}
+
+// Pack name from content.xml ('' when the pack has no name). Throws for an unreadable pack.
+export function readSiqName(filePath: string): string {
+  const zip = new AdmZip(filePath)
+  const content = parseContent(readContentEntry(zip, filePath), filePath)
+  return textOf(content.package?.attributes?.name) ?? ''
 }

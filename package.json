@@ -2,10 +2,16 @@
   "name": "sigame",
   "private": true,
   "bin": "si-game-service/dist/si-game-service/src/index.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "node scripts/build.js",
+    "smoke": "node scripts/smoke.js",
     "start": "yarn --cwd si-game-service start",
-    "package:win": "node scripts/package-win.js"
+    "package:win": "node scripts/package.js win",
+    "package:mac": "node scripts/package.js mac",
+    "package:all": "node scripts/package.js all"
   },
   "pkg": {
     "assets": [

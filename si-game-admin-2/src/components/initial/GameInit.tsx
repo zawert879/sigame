@@ -1,59 +1,33 @@
-import { Button, Collapse, CollapseProps } from "antd/lib"
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
-import { EventUpdatePlayers, ResponseGetGame, ResponseGetPlayers } from "@/types"
+import { Button, Collapse, CollapseProps } from "antd"
+import { memo, useCallback, useMemo } from "react"
 import { GameInfo } from "../GameInfo";
 import { PackList } from "./PackList";
 import { UploadPack } from "../UploadPack";
 import { PlayerList } from "./PlayerList";
 import { client } from "@/client";
-import { Event } from "@/data";
+import { useGameStore, type GameMeta } from "@/store/game";
+import { notifyError } from "@/utils/notify";
 
+// Initial screen of the admin: players and pack selection.
 // eslint-disable-next-line react/display-name
-export const GameInit: React.FC<{ game: ResponseGetGame, forceRefreshCb: () => void }> = memo(({ game, forceRefreshCb }) => {
-  const [players, setPlayers] = useState<ResponseGetPlayers>([])
-
-  const onUpdatePlayer = useCallback((data: EventUpdatePlayers) => {
-    let buff = [...players]
-    for (const player of data.added) {
-      buff.push(player)
-    }
-
-    buff = buff.filter(player => {
-      return !data.removed.includes(player.id)
-    })
-
-    for (const player of data.updated) {
-      const found = buff.find(p => p.id === player.id)
-      if (found) {
-        found.keyboardKey = player.keyboardKey
-        found.name = player.name
-      }
-    }
-
-    setPlayers(buff)
-  }, [players])
-
-  useEffect(() => {
-    client.socket.socketIo.on(Event.OnUpdatePlayers, onUpdatePlayer)
-
-    return () => {
-      client.socket.socketIo.off(Event.OnUpdatePlayers, onUpdatePlayer)
-    }
-  }, [onUpdatePlayer])
-
-  useEffect(() => {
-    const fetch = async () => {
-      setPlayers(await client.getPlayers())
-    }
-    fetch()
-  }, [])
+export const GameInit: React.FC<{ game: GameMeta }> = memo(({ game }) => {
+  // kept up to date by onUpdatePlayers in the game store
+  const players = useGameStore(state => state.players)
 
   const onDeletePlayer = useCallback(async (playerId: string) => {
-    await client.removePlayer(playerId)
+    try {
+      await client.removePlayer(playerId)
+    } catch (error) {
+      notifyError(error, 'Не удалось удалить игрока')
+    }
   }, [])
 
   const onNewPlayer = useCallback(async () => {
-    await client.addPlayer()
+    try {
+      await client.addPlayer()
+    } catch (error) {
+      notifyError(error, 'Не удалось добавить игрока')
+    }
   }, [])
 
   const items: CollapseProps['items'] = useMemo(() => [
@@ -71,11 +45,11 @@ export const GameInit: React.FC<{ game: ResponseGetGame, forceRefreshCb: () => v
       label: 'Выбор пака',
       headerClass: "!text-white ",
       children: <div className="w-full h-full p-10 items-center flex flex-col">
-        <PackList forceRefreshCb={forceRefreshCb} />
+        <PackList />
         <UploadPack />
       </div>,
     },
-  ], [forceRefreshCb, onDeletePlayer, onNewPlayer, players]);
+  ], [onDeletePlayer, onNewPlayer, players]);
 
   return (
     <>

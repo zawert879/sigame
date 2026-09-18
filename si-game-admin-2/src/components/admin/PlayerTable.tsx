@@ -1,26 +1,49 @@
-import React, { useCallback, useEffect } from "react";
-import { Button, Table } from "antd/lib";
-import { DislikeOutlined, LikeOutlined, AimOutlined } from "@ant-design/icons/lib";
-import { Player } from "@/types";
+import React, { useCallback } from "react";
+import { Button, Table } from "antd";
+import { DislikeOutlined, LikeOutlined, AimOutlined } from "@ant-design/icons";
 import { client } from "@/client";
-import _ from "lodash";
 import { InputNumber } from "../override/InputNumber";
+import type { PlayerView } from "@/store/game";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { notifyError } from "@/utils/notify";
 
 const { Column } = Table;
 
-export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}> = ({ players }) => {
-  const onUpdateSelectPlayer = useCallback((record: Player) => () => {
-    client.selectPlayer(record.id);
+const run = async (errorTitle: string, request: () => Promise<void>) => {
+  try {
+    await request()
+  } catch (error) {
+    notifyError(error, errorTitle)
+  }
+}
+
+// Number cell with its own debounced sender (one per cell, created once).
+const NumberCell: React.FC<{ value: number, onCommit: (value: number) => Promise<void> }> = ({ value, onCommit }) => {
+  const commit = useDebouncedCallback(onCommit, 150)
+  const onChange = useCallback((next: number | string | null) => {
+    if (typeof next === 'number' && Number.isFinite(next)) {
+      commit(next)
+    }
+  }, [commit])
+  return (
+    <InputNumber
+      className="!w-full"
+      value={value}
+      onChange={onChange}
+    />
+  )
+}
+
+export const PlayerTable: React.FC<{ players: PlayerView[] }> = ({ players }) => {
+  const onUpdateSelectPlayer = useCallback((record: PlayerView) => () => {
+    void run('Не удалось выбрать игрока', () => client.selectPlayer(record.id));
   }, [])
-  const onUpdateScore = useCallback((record: Player) => async (value: any) => {
-    client.setScorePlayer(record.id, value);
-  }, [])
-  const onUpdateWin = useCallback((record: Player) => async (value: any) => {
-    client.setWinPlayer(record.id, value);
-  }, [])
-  const onUpdateLose = useCallback((record: Player) => async (value: any) => {
-    client.setLosePlayer(record.id, value);
-  }, [])
+  const onUpdateScore = useCallback((record: PlayerView) => (value: number) =>
+    run('Не удалось изменить очки', () => client.setScorePlayer(record.id, value)), [])
+  const onUpdateWin = useCallback((record: PlayerView) => (value: number) =>
+    run('Не удалось изменить число правильных ответов', () => client.setWinPlayer(record.id, value)), [])
+  const onUpdateLose = useCallback((record: PlayerView) => (value: number) =>
+    run('Не удалось изменить число неверных ответов', () => client.setLosePlayer(record.id, value)), [])
   return (
     <Table
       dataSource={players.map(p => ({ key: p.id, ...p }))}
@@ -33,7 +56,7 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
         align="center"
         width={100}
         key="queue"
-        render={(_: any, record: any /* Player */) => {
+        render={(_: unknown, record: PlayerView) => {
           if(record.isCurrent){
               return (<Button
                 type="primary"
@@ -79,13 +102,14 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
       <Column
         align="center"
         width={70}
-        key="queue"
-        render={(_: any, record: Player) => (
+        key="win-button"
+        render={(_: unknown, record: PlayerView) => (
           <Button
             type="primary"
             shape="circle"
             size={"large"}
-            onClick={() => client.winPlayer(record.id)}
+            aria-label="Верно"
+            onClick={() => run('Не удалось засчитать ответ', () => client.winPlayer(record.id))}
             icon={<LikeOutlined />}
           />
         )}
@@ -93,13 +117,14 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
       <Column
         align="center"
         width={70}
-        key="queue"
-        render={(_: any, record: Player) => (
+        key="lose-button"
+        render={(_: unknown, record: PlayerView) => (
           <Button
             type="primary"
             shape="circle"
             size={"large"}
-            onClick={() => client.losePlayer(record.id)}
+            aria-label="Неверно"
+            onClick={() => run('Не удалось засчитать ответ', () => client.losePlayer(record.id))}
             icon={<DislikeOutlined />}
           />
         )}
@@ -109,12 +134,8 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
         title="Очки"
         dataIndex="score"
         key="score"
-        render={(value, record: Player) => (
-          <InputNumber
-            className="!w-full"
-            value={value}
-            onChange={_.debounce(onUpdateScore(record), 150)}
-          />
+        render={(value: number, record: PlayerView) => (
+          <NumberCell value={value} onCommit={onUpdateScore(record)} />
         )}
       />
       <Column
@@ -122,12 +143,8 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
         title="WIN"
         dataIndex="win"
         key="win"
-        render={(value, record: Player) => (
-          <InputNumber
-            className="!w-full"
-            value={value}
-            onChange={_.debounce(onUpdateWin(record), 150)}
-          />
+        render={(value: number, record: PlayerView) => (
+          <NumberCell value={value} onCommit={onUpdateWin(record)} />
         )}
       />
       <Column
@@ -135,12 +152,8 @@ export const PlayerTable: React.FC<{ players: (Player & {isCurrent: boolean})[]}
         title="LOSE"
         dataIndex="lose"
         key="lose"
-        render={(value, record: any /* Player */) => (
-          <InputNumber
-            className="!w-full"
-            value={value}
-            onChange={_.debounce(onUpdateLose(record), 150)}
-          />
+        render={(value: number, record: PlayerView) => (
+          <NumberCell value={value} onCommit={onUpdateLose(record)} />
         )}
       />
     </Table>

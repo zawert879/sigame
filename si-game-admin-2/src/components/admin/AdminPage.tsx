@@ -1,95 +1,69 @@
-import { FC } from "react";
+import { FC, ReactNode } from "react";
 import { PageSnapshotType } from "@/types";
-import { QuestionVideo } from "../question/QuestionVideo";
-import { QuestionAudio } from "../question/QuestionAudio";
 import MediaPlayer, { MediaPlayerType } from "../MediaPlayer";
-import { getGameIdFromPath } from "@/utils/route";
+import { HtmlContent } from "../question/HtmlContent";
+import { useGameStore } from "@/store/game";
+import { mediaUrl } from "@/utils/api";
+import { formatPageText } from "@/utils/utils";
 
+// A question page on the admin screen: the current page with media controls or the preview of the next one.
 export const AdminPage: FC<{
   page: PageSnapshotType;
   isPreview?: boolean;
-  isAdmin?: boolean;
-}> = ({ page, isAdmin, isPreview }) => {
-  const gameId = getGameIdFromPath()
-  const elements = [];
+}> = ({ page, isPreview }) => {
+  const gameId = useGameStore(state => state.gameId);
+  const elements: ReactNode[] = [];
+  const text = formatPageText(page.text);
+  const mediaType = isPreview ? MediaPlayerType.Preview : MediaPlayerType.Admin;
 
-  if (page.text) {
+  if (text) {
     elements.push(
       <div key="text" className="grow flex justify-center items-center">
-        <span>{page.text?.replace("ё", "e")} </span>
+        <span>{text}</span>
       </div>
     );
   }
 
   if (page.image) {
     elements.push(
-      isPreview ? (
-        <picture
-          key="image"
-          className="grow flex flex-nowrap items-center h-full p-1 justify-center mb-1"
-        >
-          <img
-            src={
-              /^https?:\/\//.test(page.image)
-                ? page.image
-                : `/api/files/${gameId}/Images/${page.image}`
-            }
-            alt="image"
-            className="h-full"
-          />
-        </picture>
-      ) : (
-        <picture
-          key="image"
-          className="grow flex flex-nowrap items-center h-1 mb-1"
-        >
-          <img
-            src={
-              /^https?:\/\//.test(page.image)
-                ? page.image
-                : `/api/files/${gameId}/Images/${page.image}`
-            }
-            alt="image"
-            className="h-full"
-          />
-        </picture>
-      )
+      <picture
+        key="image"
+        className={isPreview
+          ? "grow flex flex-nowrap items-center h-full p-1 justify-center mb-1"
+          : "grow flex flex-nowrap items-center h-1 mb-1"}
+      >
+        <img
+          src={mediaUrl(gameId, "Images", page.image)}
+          alt="image"
+          className="h-full"
+        />
+      </picture>
     );
   }
   if (page.video) {
     elements.push(
       <MediaPlayer
         key="video"
-        url={
-          /^https?:\/\//.test(page.video)
-            ? page.video
-            : `/api/files/${gameId}/Video/${page.video}`
-        }
-        type={isPreview ? MediaPlayerType.Preview :MediaPlayerType.Admin}
+        url={mediaUrl(gameId, "Video", page.video)}
+        type={mediaType}
       />
-      // <QuestionVideo
-      //   key='video'
-      //   url={/^https?:\/\//.test(page.video) ? page.video : `/api/files/${gameId}/Video/${page.video}`}
-      //   isPreview={isPreview ?? false}
-      //   isAdminButtons={isAdmin ?? false}
-      // />
     );
   }
   if (page.voice) {
     elements.push(
       <MediaPlayer
-        key="video"
-        url={
-          /^https?:\/\//.test(page.voice)
-            ? page.voice
-            : `/api/files/${gameId}/Audio/${page.voice}`
-        }
-        type={isPreview ? MediaPlayerType.Preview :MediaPlayerType.Admin}
+        key="voice"
+        url={mediaUrl(gameId, "Audio", page.voice)}
+        type={mediaType}
       />
     );
   }
-  if (elements.length > 0) {
-    return elements;
+  if (page.html) {
+    elements.push(
+      <div key="html" className="w-full grow min-h-0">
+        <HtmlContent html={page.html} />
+      </div>
+    );
   }
-  return <div className="text-3xl">HTML не поддерживается</div>;
+  return <>{elements}</>;
 };

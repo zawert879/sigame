@@ -1,16 +1,14 @@
 import { FC, memo, useCallback, useEffect, useMemo, useState } from "react";
 
-import { timeout } from "@/utils/utils";
 import { PayloadStartTable } from "@/types";
 import { client } from "@/client";
 import { RoundType } from "@/data";
+import { notifyError } from "@/utils/notify";
 // eslint-disable-next-line react/display-name
 export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, animateSelectQuestion: string | null }> = memo(({ className, data, animateSelectQuestion }) => {
+  // a round may have no themes / questions at all
   const maxColumns = useMemo(
-    () =>
-      data.themes.reduce((a, b) =>
-        a.questions.length > b.questions.length ? a : b
-      ).questions.length,
+    () => data.themes.reduce((max, theme) => Math.max(max, theme.questions.length), 0),
     [data.themes]
   );
   const [lastAnimateSelectQuestion, setLastAnimateSelectQuestion] = useState<string | null>(null)
@@ -32,8 +30,12 @@ export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, an
     }
   }, [animateSelectQuestion, lastAnimateSelectQuestion])
 
-  const handleSelectQuestion = useCallback((questionId: string) => async (event: any) => {
-    await client.selectQuestion(questionId)
+  const handleSelectQuestion = useCallback((questionId: string) => async () => {
+    try {
+      await client.selectQuestion(questionId)
+    } catch (error) {
+      notifyError(error, 'Не удалось выбрать вопрос')
+    }
   }, []);
 
   return (
@@ -62,12 +64,16 @@ export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, an
                         </td>
                       );
                     }
+                    return <td key={`empty_${questionIndex}`} className="!min-w-20 border border-slate-300" />;
                   })}
                 </tr>
               );
             })
             : data.themes.map((theme, themeIndex) => {
               const question = theme.questions[0];
+              if (!question) {
+                return null;
+              }
               return (
                 <tr key={themeIndex}>
                   <td
@@ -79,25 +85,6 @@ export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, an
                   >
                     {hasQuestion(question) ? theme.name : ""}
                   </td>
-                  {/* <td className="text-white text-center border-slate-300 min-w-[150px] max-w-[250px] border pl-4">
-                    {theme.name}
-                  </td> */}
-                  {/* {[...Array(maxColumns)].map((_, questionIndex) => {
-                    const question = theme.questions[questionIndex];
-                    if (question) {
-                      return (
-                        <td
-                          key={question.id}
-                          id={'question_' + question.id}
-                          className={`!min-w-20 text-white text-center border border-slate-300 ${hasQuestion(question) ? "hover:bg-gray-300" : ""
-                            }`}
-                          onClick={hasQuestion(question) ? handleSelectQuestion(question.id) : undefined}
-                        >
-                          {hasQuestion(question) ? question.price : ""}
-                        </td>
-                      );
-                    }
-                  })} */}
                 </tr>
               );
             })}
@@ -108,7 +95,7 @@ export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, an
 });
 
 const hasQuestion = (question?: PayloadStartTable['themes'][0]['questions'][0]) => {
-  if (question && question.isClose) {
+  if (question && question.isAvailable) {
     return true
   }
 

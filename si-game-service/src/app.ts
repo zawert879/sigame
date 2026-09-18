@@ -1,23 +1,31 @@
 import Koa from 'koa'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
-import { packagesDir, siqDir, SystemEvent } from './data'
-import { Controller } from './api/socket/Controller'
-import { router } from './api/rest/router'
-import koaBody from 'koa-body'
-import { AppState } from './entity/AppState'
-import { Socket } from './api/socket/Socket'
-import { clearPackages } from './utils/clearPackages'
 import cors from '@koa/cors'
 import fs from 'fs'
 import path from 'path'
 import serve from 'koa-static'
 import mount from 'koa-mount'
+import { SystemEvent } from './data'
+import { FRONTEND_STATIC_DIR, PACKAGES_DIR, SIQ_DIR } from './config'
+import { isAdminToken } from './auth'
+import { serveFiles } from './api/files'
+import { Controller } from './api/socket/Controller'
+import { Socket } from './api/socket/Socket'
+import { router } from './api/rest/router'
+import { AppState } from './entity/AppState'
+import { mediaDir, removeStaleMedia } from './utils/packages'
 
-for (const runtimeDir of [siqDir, packagesDir]) {
-  if (!fs.existsSync(runtimeDir)) {
-    fs.mkdirSync(runtimeDir, { recursive: true })
-  }
+// Builds the app without listening: src/index.ts calls httpServer.listen(PORT), a test can listen(0).
+
+// Whole request, i.e. a pack upload (up to 1 GB): 2 hours ≈ 1.2 Mbit/s. Node's default (5 minutes since Node 18)
+// cut off a big pack sent over Wi-Fi with 408. A stalled connection is still closed by the idle timeout below.
+const REQUEST_TIMEOUT = 2 * 60 * 60 * 1000
+// socket idle time
+const IDLE_TIMEOUT = 5 * 60 * 1000
+
+for (const runtimeDir of [SIQ_DIR, PACKAGES_DIR]) {
+  fs.mkdirSync(runtimeDir, { recursive: true })
 }
 
 const app = new Koa()
@@ -25,37 +33,23 @@ const httpServer = createServer(app.callback())
 const io = new Server(httpServer, {
   cors: {
     origin: '*',
-    credentials: true,
   },
 })
 
 const appState = new AppState()
 
-app.use(koaBody({
-  multipart: true,
-  formidable: {
-    maxFileSize: 1024 * 1024 * 1024,
-  },
-}))
-
-app.use(async (ctx, next) => {
-  ctx.appState = appState
-  await next()
-})
-
 app.use(cors())
 app.use(router.routes())
-
 app.use(router.allowedMethods())
 
-app.use(mount('/api/files', serve('./packages')))
-app.use(mount('/files', serve('./packages')))
+// media of the games of this process only (see utils/packages.ts)
+app.use(mount('/api/files', serveFiles(mediaDir)))
+app.use(mount('/files', serveFiles(mediaDir)))
 
-const frontendStaticDir = path.resolve(process.env.FRONTEND_STATIC_DIR ?? path.join(__dirname, '..', '..', 'public'))
+if (fs.existsSync(FRONTEND_STATIC_DIR)) {
+  app.use(serve(FRONTEND_STATIC_DIR))
 
-if (fs.existsSync(frontendStaticDir)) {
-  app.use(serve(frontendStaticDir))
-
+  // SPA fallback: /admin/<id> → admin.html, /player/<id> → player.html, anything else → index.html
   app.use(async (ctx, next) => {
     await next()
 
@@ -63,9 +57,9 @@ if (fs.existsSync(frontendStaticDir)) {
       return
     }
 
-    const routeName = ctx.path.split('/').filter(Boolean)[0]
-    const routeHtmlPath = routeName ? path.join(frontendStaticDir, `${routeName}.html`) : path.join(frontendStaticDir, 'index.html')
-    const htmlPath = fs.existsSync(routeHtmlPath) ? routeHtmlPath : path.join(frontendStaticDir, 'index.html')
+    const routeName = ctx.path.split('/').find(Boolean)
+    const routeHtmlPath = routeName && /^[\w-]+$/.test(routeName) ? path.join(FRONTEND_STATIC_DIR, `${routeName}.html`) : null
+    const htmlPath = routeHtmlPath && fs.existsSync(routeHtmlPath) ? routeHtmlPath : path.join(FRONTEND_STATIC_DIR, 'index.html')
 
     if (!fs.existsSync(htmlPath)) {
       return
@@ -76,21 +70,22 @@ if (fs.existsSync(frontendStaticDir)) {
     ctx.body = fs.createReadStream(htmlPath)
   })
 }
-io.on(SystemEvent.Connection, _socket => {
-  let socket: Socket | undefined = new Socket(_socket)
-  let controller: Controller | undefined = new Controller(socket, appState)
 
-  socket.socketIo.on(SystemEvent.Handshake, controller.connect)
+io.on(SystemEvent.Connection, socketIo => {
+  const socket = new Socket(socketIo)
+  // eslint-disable-next-line no-new
+  new Controller(socket, appState, isAdminToken(socket.authToken))
+})
 
-  socket.socketIo.on(SystemEvent.Disconnect, () => {
-    controller?.disconnect()
-    socket = undefined
-    controller = undefined
-  })
+// Media left by earlier runs are removed only once this server listens: a copy that exits because the port is taken
+// must not touch anything
+httpServer.once('listening', () => {
+  removeStaleMedia()
 })
 
 const defaultGame = appState.newGame('Default')
 
-clearPackages()
-httpServer.timeout = 300000
-export { defaultGame, httpServer }
+httpServer.timeout = IDLE_TIMEOUT
+httpServer.requestTimeout = REQUEST_TIMEOUT
+
+export { app, io, httpServer, appState, defaultGame }

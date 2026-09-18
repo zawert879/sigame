@@ -18,7 +18,6 @@
       "newLine": "LF",
       "baseUrl": ".",
       "paths": {
-          "@common/data": ["./src/data"],
           "@common/*": ["../common/*"]
       },
       "typeRoots": [
@@ -26,10 +25,11 @@
           "./node_modules/@types",
       ],
   },
+  "include": [
+      "src"
+  ],
   "exclude": [
       "node_modules",
-      "build",
-      "lib",
-      "bin"
+      "dist"
   ]
 }
