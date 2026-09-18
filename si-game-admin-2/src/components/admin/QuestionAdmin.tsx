@@ -6,6 +6,7 @@ import { QuestionType as QuestionTypeComponent } from "@/components/question/Que
 import { QuestionAnswerType, QuestionType, SelectionModeType } from "@/data";
 import { PayloadQuestionPage, PayloadStartQuestion } from "@/types";
 import { AdminPage } from "./AdminPage";
+import { HostReplic } from "./HostReplic";
 import { useGameStore } from "@/store/game";
 import { mediaUrl } from "@/utils/api";
 
@@ -49,7 +50,10 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
           >
             {isPreparation
               ? <QuestionTypeComponent text={question.type} /> :
-              pageData.currentPage && (<AdminPage key={`${questionRun}-${pageData.pageIndex}`} page={pageData.currentPage} />)}
+              pageData.currentPage && (<>
+                <AdminPage key={`${questionRun}-${pageData.pageIndex}`} page={pageData.currentPage} />
+                <HostReplic page={pageData.currentPage} />
+              </>)}
           </div>
           <div className="w-1/4">
             {question.answerType === QuestionAnswerType.Group && question.answerGroup.length > 0 && (
@@ -92,14 +96,19 @@ export const QuestionAdmin: FC<{ question: PayloadStartQuestion, pageData: Paylo
                 ))}
             </div>
           </div>
-          <div className={`w-1/2 h-full border-l-2 border-l-white text-center flex justify-center items-center ${pageData.nextPage?.isMarker && "border-white border-[10px] border-l-[10px]"}`}>
-            {pageData.nextPage ? (
-              <AdminPage page={pageData.nextPage} isPreview />
-            ) : (
-              <Space direction="vertical">
-                <StopOutlined style={{ fontSize: 50 }} />
-                <div>Конец вопроса</div>
-              </Space>
+          <div className={`w-1/2 h-full border-l-2 border-l-white text-center flex flex-col ${pageData.nextPage?.isMarker && "border-white border-[10px] border-l-[10px]"}`}>
+            {pageData.nextPage ? (<>
+              <div className="grow min-h-0 w-full flex justify-center items-center">
+                <AdminPage page={pageData.nextPage} isPreview />
+              </div>
+              <HostReplic page={pageData.nextPage} compact />
+            </>) : (
+              <div className="grow flex justify-center items-center">
+                <Space direction="vertical">
+                  <StopOutlined style={{ fontSize: 50 }} />
+                  <div>Конец вопроса</div>
+                </Space>
+              </div>
             )}
           </div>
         </div>

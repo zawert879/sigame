@@ -3,7 +3,6 @@ import type { AddressInfo } from 'net'
 import os from 'os'
 import path from 'path'
 import { io, type Socket } from 'socket.io-client'
-// type-only: the modules themselves are loaded by startServer, after the environment is set
 import type * as appModule from '../../src/app'
 import type * as configModule from '../../src/config'
 import type { AckError, PackInfo } from '../../src/types'
@@ -15,11 +14,9 @@ type ConfigModule = typeof configModule
 export type AppDirs = {
   siqDir: string;
   packagesDir: string;
-  // formidable (koa-body) writes upload temp files here
   uploadTmpDir: string;
 }
 
-// an application that is loaded but does not listen yet
 export type LoadedApp = AppDirs & {
   app: AppModule;
   config: ConfigModule;
@@ -31,11 +28,8 @@ export type TestServer = LoadedApp & {
 }
 
 export type StartOptions = {
-  // extra environment for src/config.ts (ADMIN_TOKEN, FRONTEND_STATIC_DIR, ...)
   env?: Record<string, string>;
-  // runs before the application is loaded, e.g. to put files into its directories
   prepare?: (dirs: AppDirs) => void;
-  // the directories of another server (a second copy of the app on the same data); new ones by default
   dirs?: AppDirs;
 }
 
@@ -56,8 +50,6 @@ function newDirs(): AppDirs {
   return dirs
 }
 
-// Loads a fresh copy of the application in its own module registry (own config, AppState with its Default game,
-// Koa app and socket.io server) with its own directories, without listening.
 export function loadApp(options: StartOptions = {}): LoadedApp {
   const dirs = options.dirs ?? newDirs()
   const { siqDir, packagesDir, uploadTmpDir } = dirs
@@ -66,12 +58,10 @@ export function loadApp(options: StartOptions = {}): LoadedApp {
   const variables: Record<string, string> = { SIQ_DIR: siqDir, PACKAGES_DIR: packagesDir, ...options.env }
   const saved = new Map(Object.keys(variables).map(key => [key, process.env[key]]))
   Object.assign(process.env, variables)
-  // formidable reads its default upload dir from os.tmpdir() when it is loaded
   const tmpdir = jest.spyOn(os, 'tmpdir').mockReturnValue(uploadTmpDir)
   let modules: { app: AppModule; config: ConfigModule } | undefined
   try {
     jest.isolateModules(() => {
-      // a fresh copy of the modules has to be loaded synchronously, inside isolateModules
       /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
       modules = {
         config: require('../../src/config') as ConfigModule,
@@ -97,7 +87,6 @@ export function loadApp(options: StartOptions = {}): LoadedApp {
   return { ...modules, ...dirs }
 }
 
-// loadApp + listen on a random port
 export async function startServer(options: StartOptions = {}): Promise<TestServer> {
   const loaded = loadApp(options)
   const { app } = loaded
@@ -125,7 +114,6 @@ export type Received = {
   payload: unknown;
 }
 
-// socket.io client that records every push it receives
 export class TestClient {
   readonly socket: Socket
   readonly received: Received[] = []
@@ -152,7 +140,6 @@ export class TestClient {
     return this
   }
 
-  // a request with an ack; rejects when the server does not answer in time
   async request<T = unknown>(event: string, payload?: unknown): Promise<T> {
     const socket = this.socket.timeout(ACK_TIMEOUT)
     const response: unknown = payload === undefined ? await socket.emitWithAck(event) : await socket.emitWithAck(event, payload)
@@ -168,8 +155,6 @@ export class TestClient {
     return response
   }
 
-  // Round trip through the server: pushes are delivered in order on a connection, so every push sent to this
-  // socket before the call has arrived when it resolves (lets a test assert that nothing was pushed).
   async sync(): Promise<void> {
     await this.request('getGames')
   }
@@ -182,12 +167,10 @@ export class TestClient {
     return this.received.slice(mark).filter(item => event === undefined || item.event === event)
   }
 
-  // payloads of `event` received after mark
   payloads<T>(mark: number, event: string): T[] {
     return this.since(mark, event).map(item => item.payload as T)
   }
 
-  // the first `event` received after `from` (matching `match`), waiting for it when it has not arrived yet
   async waitFor<T = unknown>(event: string, options: { from?: number; match?: (payload: T) => boolean; timeout?: number } = {}): Promise<T> {
     const { from = 0, match, timeout = WAIT_TIMEOUT } = options
     const find = () => this.received.slice(from).find(item => item.event === event && (!match || match(item.payload as T)))
@@ -223,7 +206,6 @@ export function isAckError(value: unknown): value is AckError {
   return typeof value === 'object' && value !== null && 'error' in value && typeof (value as AckError).error === 'string'
 }
 
-// polls `condition` (no fixed sleeps): for effects that are not pushed, like a closed connection or a removed file
 export async function waitUntil(condition: () => boolean, description: string, timeout = WAIT_TIMEOUT): Promise<void> {
   const started = Date.now()
   while (!condition()) {
@@ -238,12 +220,9 @@ export async function waitUntil(condition: () => boolean, description: string, t
   }
 }
 
-// ---- REST ----
-
 export type UploadFile = {
   name: string;
   content: Buffer | string;
-  // multipart field, 'file' by default
   field?: string;
 }
 

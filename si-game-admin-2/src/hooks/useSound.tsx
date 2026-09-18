@@ -34,11 +34,9 @@ const SoundContext = React.createContext<ContextType | null>(null);
 
 // eslint-disable-next-line react/display-name
 export const SoundProvider: React.FC<PropsWithChildren> = memo(({ children }) => {
-    // game sounds are played on the player screen, so they follow the player volume from the settings
     const volume = toMediaVolume(useGameStore(state => state.settings?.playerVolume))
     const volumeRef = useRef(volume)
     volumeRef.current = volume
-    // use-sound updates the volume of loaded sounds only; sounds that finish loading later pick it up in onload
     const options = useMemo(() => ({
         volume,
         onload(this: { volume: (value: number) => unknown }) {

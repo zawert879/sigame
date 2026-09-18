@@ -17,7 +17,6 @@ const run = async (errorTitle: string, request: () => Promise<void>) => {
   }
 }
 
-// Number cell with its own debounced sender (one per cell, created once).
 const NumberCell: React.FC<{ value: number, onCommit: (value: number) => Promise<void> }> = ({ value, onCommit }) => {
   const commit = useDebouncedCallback(onCommit, 150)
   const onChange = useCallback((next: number | string | null) => {

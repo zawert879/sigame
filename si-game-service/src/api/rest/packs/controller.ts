@@ -12,7 +12,6 @@ type CachedPack = {
   pack: PackInfo;
 }
 
-// packs by file; a pack is read again only when its mtime or size changes
 const packCache = new Map<string, CachedPack>()
 
 export function forgetPackName(file: string) {
@@ -29,11 +28,9 @@ async function packInfo(file: string): Promise<PackInfo> {
 
   let pack: PackInfo
   try {
-    // a pack without a name is shown under its file name
     const name = readSiqName(filePath)
     pack = { name: name.trim() === '' ? path.parse(file).name : name, file, isBroken: false }
   } catch (error) {
-    // a broken pack is still listed so it can be deleted
     console.warn(`Не удалось прочитать пак ${file}:`, error instanceof Error ? error.message : error)
     pack = { name: '', file, isBroken: true }
   }
@@ -50,7 +47,6 @@ const packs = async (ctx: Context) => {
       // eslint-disable-next-line no-await-in-loop
       result.push(await packInfo(file))
     } catch (error) {
-      // e.g. removed between readdir and stat
       console.warn(`Не удалось прочитать пак ${file}:`, error instanceof Error ? error.message : error)
     }
   }

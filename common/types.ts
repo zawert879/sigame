@@ -138,10 +138,11 @@ export type Dao = {
 } | {
   type: Event.CancelQuestion;
   payload: RequestVoid;
+} | {
+  type: Event.OnUpdateSettings;
+  payload: ResponseGetSettings;
 }
 
-// Every socket request is acknowledged. On failure the ack payload is an AckError
-// instead of the typed response; the client rejects the request promise with it.
 export type AckError = {
   error: AckErrorCode;
   message?: string;
@@ -269,7 +270,6 @@ export type ResponseGetGame = {
   };
 }
 
-// Game progress for the admin panel. roundIndex is 0-based; counters refer to the current round.
 export type GameProgress = {
   roundIndex: number;
   roundsCount: number;
@@ -295,12 +295,9 @@ export type RequestVoid = {}
 export type ResponseVoid = {}
 export type ResponseGetPlayers = Player[]
 
-// REST: GET /api/packs — the .siq files of the server
 export type PackInfo = {
-  // name from content.xml; the file name without '.siq' when the pack has none; '' when isBroken
   name: string;
   file: string;
-  // content.xml could not be read: the pack cannot be played, only deleted
   isBroken: boolean;
 }
 export type ResponseGetPacks = PackInfo[]
@@ -349,7 +346,6 @@ export type EventUpdateQuestionPage = {
 export type PayloadQuestionPage = {
   currentPage: PageSnapshotType | null;
   nextPage: PageSnapshotType | null;
-  // 0-based index of currentPage and total number of pages of the question (0 when it has no pages)
   pageIndex: number;
   pagesCount: number;
 }
@@ -373,7 +369,6 @@ export type PayloadStartQuestion = {
   nextPage: PageSnapshotType | null;
   pageIndex: number;
   pagesCount: number;
-  // true while the question has not been played yet (it is still selectable in the table)
   isAvailable: boolean;
   price: number;
   rightAnswer: string[] | null;
@@ -411,7 +406,6 @@ export type PayloadStartThemeListInRound = {
 }
 export type PayloadStartResults = {
   players: Player[];
-  // results after the last round of the pack: the game is over
   isLastRound: boolean;
   progress: GameProgress;
 }
@@ -423,5 +417,6 @@ export type PageSnapshotType = {
   video: string | null;
   voice: string | null;
   html: string | null;
+  htmlFile: string | null;
   isMarker: boolean;
 }

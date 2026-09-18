@@ -8,7 +8,6 @@ import { notifyError } from "@/utils/notify";
 // eslint-disable-next-line react/display-name
 export const PlayerSettingsModal: React.FC = memo(() => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // kept up to date by onUpdatePlayers in the game store
   const players = useGameStore(state => state.players)
 
   const showModal = useCallback(() => {

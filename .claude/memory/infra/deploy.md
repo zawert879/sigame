@@ -21,7 +21,10 @@ Docker-деплой (GHCR + dcm.zawserv.ru) удалён 2026-09-18 по реш�
 
 ## Ограничения
 
-- Без Apple Developer ID бинарник не нотаризован: после скачивания Gatekeeper блокирует первый запуск
-  (правый клик → «Открыть» или `xattr -d com.apple.quarantine <файл>`). На Windows без сертификата — предупреждение SmartScreen.
+- Без Apple Developer ID бинарник не нотаризован: после скачивания Gatekeeper блокирует первый запуск. На macOS 15+
+  правый клик → «Открыть» больше не работает: Системные настройки → Конфиденциальность и безопасность → «Всё равно открыть»
+  (~1 час после попытки) или `xattr -d com.apple.quarantine <файл>`. Ad-hoc подпись без hardened runtime — с `--options runtime`
+  pkg-бинарник на Node 24 падает без entitlement `com.apple.security.cs.allow-jit`.
+- Windows без сертификата — SmartScreen «Выполнить в любом случае»; включённый Smart App Control блокирует без обхода.
 - `gh` CLI на машине не установлен; статус Actions для публичного репо `zawert879/sigame` смотреть через
   `https://api.github.com/repos/zawert879/sigame/actions/runs`.

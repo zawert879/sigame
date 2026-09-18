@@ -12,7 +12,6 @@ import type {
   ResponseVoid,
 } from '../types'
 
-// Big packs extract their assets before the server acknowledges selectPack.
 const SELECT_PACK_TIMEOUT = 180_000
 const KEY_PRESS_TIMEOUT = 5_000
 const SERVER_DISCONNECT_RETRY_MS = 2_000
@@ -25,7 +24,6 @@ export class Client {
   private status: ConnectionStatus
   private hasConnected: boolean
   private selectedGameId: string | null = null
-  // re-selection of the game after a reconnect; requests wait for it
   private resync: Promise<void> | null = null
   private readonly statusListeners = new Set<Listener>()
   private readonly reconnectListeners = new Set<Listener>()
@@ -39,11 +37,8 @@ export class Client {
     io.on('connect_error', this.handleConnectError)
   }
 
-  // --- connection state -------------------------------------------------------------------------------------------
-
   public getStatus = (): ConnectionStatus => this.status
 
-  // id of the game this connection is subscribed to (re-selected automatically after reconnects)
   public get selectedGame(): string | null {
     return this.selectedGameId
   }
@@ -55,7 +50,6 @@ export class Client {
     }
   }
 
-  // Called after every reconnect, once the selected game has been re-selected: screens refetch their snapshot here.
   public onReconnect(listener: Listener): () => void {
     this.reconnectListeners.add(listener)
     return () => {
@@ -63,7 +57,6 @@ export class Client {
     }
   }
 
-  // Subscribes to a server push event; returns the unsubscribe function.
   public on<T>(event: Event, handler: (payload: T) => void): () => void {
     this.socket.socketIo.on(event, handler)
     return () => {
@@ -85,13 +78,11 @@ export class Client {
     if (!isReconnect) {
       return
     }
-    // The server creates a fresh controller for every connection: select the game again.
     const gameId = this.selectedGameId
     const resync: Promise<void> = gameId
       ? this.socket.send<ResponseVoid>({ type: Event.SelectGame, payload: { gameId } }).then(
         () => undefined,
         () => {
-          // not subscribed any more (game closed, timeout): the next selectGame() subscribes again
           if (this.selectedGameId === gameId) {
             this.selectedGameId = null
           }
@@ -109,7 +100,6 @@ export class Client {
 
   private handleDisconnect = (reason: string) => {
     this.setStatus('disconnected')
-    // socket.io reconnects by itself except after a server-side disconnect
     if (reason === 'io server disconnect') {
       setTimeout(() => {
         if (!this.socket.connected) {
@@ -150,8 +140,6 @@ export class Client {
     return this.socket.send<T>(dao, timeoutMs)
   }
 
-  // --- games ------------------------------------------------------------------------------------------------------
-
   async getGames(): Promise<ResponseGetGames> {
     return this.request<ResponseGetGames>({ type: Event.GetGames, payload: {} })
   }
@@ -164,7 +152,6 @@ export class Client {
     return this.request<ResponseNewGame>({ type: Event.NewGame, payload: { gameName } })
   }
 
-  // Subscribes this connection to the game's events; remembered and repeated after every reconnect.
   async selectGame(gameId: string): Promise<void> {
     await this.request<ResponseVoid>({ type: Event.SelectGame, payload: { gameId } })
     this.selectedGameId = gameId
@@ -177,8 +164,6 @@ export class Client {
   async exit(): Promise<void> {
     await this.request<ResponseVoid>({ type: Event.Exit, payload: {} })
   }
-
-  // --- game flow --------------------------------------------------------------------------------------------------
 
   async next(): Promise<void> {
     await this.request<ResponseVoid>({ type: Event.Next, payload: {} })
@@ -208,15 +193,12 @@ export class Client {
     await this.request<ResponseVoid>({ type: Event.UpdateMediaPlayer, payload: data })
   }
 
-  // Player buttons (keyboard). Fire-and-forget: dropped while offline or before a game is selected.
   keyPress(key: string, code: string): void {
     if (!this.socket.connected || !this.selectedGameId || this.resync) {
       return
     }
     this.socket.send<ResponseVoid>({ type: Event.KeyPress, payload: { key, code } }, KEY_PRESS_TIMEOUT).catch(() => undefined)
   }
-
-  // --- players ----------------------------------------------------------------------------------------------------
 
   async getPlayers(): Promise<ResponseGetPlayers> {
     return this.request<ResponseGetPlayers>({ type: Event.GetPlayers, payload: {} })
@@ -257,8 +239,6 @@ export class Client {
   async setLosePlayer(playerId: string, value: number): Promise<void> {
     await this.request<ResponseVoid>({ type: Event.SetLosePlayer, payload: { playerId, value } })
   }
-
-  // --- score and settings -----------------------------------------------------------------------------------------
 
   async setScoreValue(value: number): Promise<void> {
     await this.request<ResponseVoid>({ type: Event.SetScoreValue, payload: { value } })

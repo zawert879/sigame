@@ -1,6 +1,3 @@
-// Helpers for values produced by fast-xml-parser: an element that occurs once is an object (not an array),
-// an empty element is '', an element with attributes keeps its text in '#text'.
-
 export type OneOrMany<T> = T | T[]
 
 export function toArray<T>(value: OneOrMany<T> | null | undefined): T[] {

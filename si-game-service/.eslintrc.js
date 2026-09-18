@@ -1,9 +1,3 @@
-// Naming rules of xo-typescript with two changes:
-// - const variables may also be UPPER_CASE (config.ts: PORT, ADMIN_TOKEN, ...);
-// - quoted names that are not identifiers ('content.xml', 'Images/a.png', the '#text' key of the XML parser) are not
-//   checked. The `requiresQuotes` entry below is meant to allow them, but an entry with a filter always takes
-//   precedence over it, so the filter has to skip them all (xo only skips the names that contain '-' or ' ').
-// objectKeyFormats: the formats of object literal keys that are identifiers.
 const namingConvention = objectKeyFormats => {
 	const skipQuoted = {regex: '[^\\p{L}\\p{N}_$]', match: false};
 	const underscores = {leadingUnderscore: 'allowSingleOrDouble', trailingUnderscore: 'allow'};
@@ -77,7 +71,6 @@ module.exports = {
 				'*.tsx',
 			],
 			parserOptions: {
-				// Type information for src/ and test/ (tsconfig.json itself only compiles src/)
 				project: './tsconfig.eslint.json',
 				tsconfigRootDir: __dirname,
 			},
@@ -91,14 +84,12 @@ module.exports = {
 				'@typescript-eslint/prefer-readonly': 'off',
 				'capitalized-comments': 'off',
 				'no-implicit-coercion': 'off',
-				// Type-only namespaces (serverTypes.ts: SIQ, the structure of content.xml) are declared with `declare`
 				'@typescript-eslint/no-namespace': ['error', {allowDeclarations: true}],
 				'@typescript-eslint/naming-convention': namingConvention(['strictCamelCase']),
 			},
 
 		},
 		{
-			// Jest suite (jest.config.js: roots <rootDir>/test) and its helpers
 			env: {
 				node: true,
 				jest: true,
@@ -107,7 +98,6 @@ module.exports = {
 				'test/**/*.ts',
 			],
 			rules: {
-				// Environment variables are passed as objects: startServer({env: {ADMIN_TOKEN: 'secret'}})
 				'@typescript-eslint/naming-convention': namingConvention(['strictCamelCase', 'UPPER_CASE']),
 			},
 		},

@@ -1,19 +1,15 @@
 import type AdmZip from 'adm-zip'
 import type { OneOrMany } from './utils/siqValue'
 
-// A parsed .siq archive. Asset maps are keyed by '@<entry name without the folder>'.
 export type Data = {
   texts: Map<string, AdmZip.IZipEntry>;
   images: Map<string, AdmZip.IZipEntry>;
   audios: Map<string, AdmZip.IZipEntry>;
   videos: Map<string, AdmZip.IZipEntry>;
+  htmls: Map<string, AdmZip.IZipEntry>;
   content: SIQ.Content;
 }
 
-// Raw structure of content.xml as produced by fast-xml-parser
-// (attributes in `attributes`, text of an element with attributes in '#text', single elements are not arrays,
-// empty elements are ''). Covers SIQ 5 (`params`) and SIQ 4 (`type` + `scenario`).
-// Types only, hence `declare`: the namespaces group the element types and emit no code.
 export declare namespace SIQ {
   export type Text = string | {
     '#text'?: string;
@@ -65,7 +61,6 @@ export declare namespace SIQ {
         };
         attributes?: {
           name?: string;
-          // 'final' for the final round, anything else is a regular round
           type?: string;
         };
       }
@@ -84,11 +79,9 @@ export declare namespace SIQ {
         export namespace Theme {
           export type Question = {
             info?: Info;
-            // SIQ 5
             params?: {
               param?: OneOrMany<Question.Param>;
             };
-            // SIQ 4
             type?: Question.Type;
             scenario?: {
               atom?: OneOrMany<Question.ScenarioAtom>;
@@ -101,13 +94,11 @@ export declare namespace SIQ {
             };
             attributes?: {
               price?: string;
-              // SIQ 5 question type: stake | secret | secretPublicPrice | secretNoQuestion | noRisk | simple | ...
               type?: string;
             };
           }
 
           export namespace Question {
-            // SIQ 5 <param>. Content params hold `item`s, a group param (type="group") holds nested params.
             export type Param = {
               '#text'?: string;
               item?: OneOrMany<ContentItem>;
@@ -125,28 +116,25 @@ export declare namespace SIQ {
               };
             }
 
-            // SIQ 5 content <item>
             export type ContentItem = string | {
               '#text'?: string;
               attributes?: {
-                type?: string; // text | image | audio | video | html
+                type?: string;
                 isRef?: string;
                 waitForFinish?: string;
-                placement?: string; // screen | replic | background
+                placement?: string;
                 duration?: string;
               };
             }
 
-            // SIQ 4 <atom>
             export type ScenarioAtom = string | {
               '#text'?: string;
               attributes?: {
-                type?: string; // text | say | image | voice | video | html | marker
+                type?: string;
                 time?: string;
               };
             }
 
-            // SIQ 4 <type name="cat|bagcat|auction|sponsored|simple">
             export type Type = {
               param?: OneOrMany<Type.Param>;
               attributes?: {
@@ -158,7 +146,7 @@ export declare namespace SIQ {
               export type Param = string | {
                 '#text'?: string;
                 attributes?: {
-                  name?: string; // theme | cost | self | knows
+                  name?: string;
                 };
               }
             }

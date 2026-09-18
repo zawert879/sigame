@@ -7,7 +7,6 @@ import { deletePack, listPacks, startServer, TestClient, type TestServer, upload
 
 const TOKEN = 'secret-token'
 
-// allowed without the admin token: what a player display needs
 const publicEvents: string[] = [Event.GetGames, Event.GetGame, Event.SelectGame, Event.GetPlayers, Event.GetSettings, Event.KeyPress]
 const adminEvents = Object.values(Event).filter(event => !/^on[A-Z]/.test(event) && !publicEvents.includes(event))
 
@@ -69,7 +68,6 @@ describe('ADMIN_TOKEN', () => {
       }
     }
 
-    // nothing was changed
     expect(await display.request<Player[]>(Event.GetPlayers)).toEqual(playersBefore)
     expect(await display.request<ResponseGetGames>(Event.GetGames)).toEqual(gamesBefore)
   })
@@ -94,7 +92,6 @@ describe('ADMIN_TOKEN', () => {
     expect(await admin.request(Event.Next)).toEqual({})
     expect(await admin.request(Event.SetScoreValue, { value: 10 })).toEqual({})
 
-    // the player display of the same game still gets the pushes
     const display = await connect()
     await display.request(Event.SelectGame, { gameId: ownGame })
     const from = display.mark()

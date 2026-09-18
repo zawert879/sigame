@@ -13,7 +13,7 @@ export const PackList: React.FC = () => {
   if (packs.length === 0) return null
   return (
     <div className="w-full min-h-80 border-2 border-gray-200 rounded-2xl p-4 mb-4 backdrop-blur-sm bg-white">
-      {packs.map(pack => <PackListItem key={pack.file} title={pack.name} file={pack.file} />)}
+      {packs.map(pack => <PackListItem key={pack.file} pack={pack} />)}
     </div>
   );
 };

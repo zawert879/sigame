@@ -1,19 +1,52 @@
 import { httpServer } from './app'
-import { ADMIN_TOKEN, PORT, SIQ_DIR } from './config'
-import { printStartupBanner } from './startupBanner'
+import { ADMIN_TOKEN, isPortExplicit, PORT, SIQ_DIR } from './config'
+import { listenFailureMessage, listenSafely } from './portGuard'
+import { printStartupBanner, tvUrl } from './startupBanner'
 
-// a stray rejection must not kill a running game (all game state lives in memory)
 process.on('unhandledRejection', reason => {
   console.error('Необработанная ошибка:', reason)
 })
 
-httpServer.on('error', error => {
-  const { code } = error as NodeJS.ErrnoException
-  console.error(code === 'EADDRINUSE' ? `Порт ${PORT} уже занят. Закрой другую копию игры или задай PORT.` : error)
-  process.exit(1)
-})
+const exitAfterOutput = (code: number) => {
+  process.exitCode = code
+  process.stdout.write('', () => {
+    process.stderr.write('', () => {
+      process.exit(code)
+    })
+  })
+}
 
-httpServer.listen(PORT, () => {
-  const address = httpServer.address()
-  printStartupBanner(typeof address === 'object' && address ? address.port : PORT, ADMIN_TOKEN, SIQ_DIR)
-})
+const start = async () => {
+  const result = await listenSafely(httpServer, { port: PORT, isExplicit: isPortExplicit })
+  switch (result.status) {
+    case 'running': {
+      console.log(`SI Game уже запущена: ${tvUrl(result.port)}`)
+      exitAfterOutput(0)
+      break
+    }
+
+    case 'failed': {
+      console.error(listenFailureMessage(result, tvUrl(result.port)))
+      exitAfterOutput(1)
+      break
+    }
+
+    case 'listening': {
+      httpServer.on('error', error => {
+        console.error('Ошибка HTTP-сервера:', error)
+      })
+      if (!isPortExplicit && result.port !== PORT) {
+        console.log(`Порт ${PORT} занят, SI Game запущена на порту ${result.port}.`)
+      }
+
+      printStartupBanner(result.port, ADMIN_TOKEN, SIQ_DIR)
+      break
+    }
+
+    default: {
+      break
+    }
+  }
+}
+
+void start()

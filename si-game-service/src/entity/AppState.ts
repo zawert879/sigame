@@ -19,9 +19,6 @@ export class AppState {
     return game
   }
 
-  // The game leaves the list before anything else happens, so it is never found again even when a later step fails.
-  // Resolves once its media are removed; that never fails (a directory that cannot be removed is logged and removed
-  // at a later start, see utils/packages.ts).
   async closeGame(gameId: string): Promise<void> {
     const game = this._games.get(gameId)
     if (!game) {

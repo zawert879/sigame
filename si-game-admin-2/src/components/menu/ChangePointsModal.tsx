@@ -16,7 +16,6 @@ export const ChangePointsModal: React.FC = memo(
     const dataRef = useRef<ResponseGetSettings>()
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // local copy for immediate feedback while the debounced request is pending
     const updateData = useCallback((patch: Partial<ResponseGetSettings>) => {
       if (dataRef.current) {
         dataRef.current = { ...dataRef.current, ...patch }
@@ -37,7 +36,6 @@ export const ChangePointsModal: React.FC = memo(
         const settings = await client.getSettingsData()
         dataRef.current = settings
         setData(settings)
-        // quick score buttons and media volumes use the settings from the game store
         useGameStore.getState().setSettings(settings)
       } catch (error) {
         notifyError(error, 'Не удалось загрузить настройки')
@@ -58,14 +56,12 @@ export const ChangePointsModal: React.FC = memo(
         }
       } catch (error) {
         notifyError(error, 'Не удалось сохранить настройки')
-        // show what the server actually has
         await fetch()
       }
     }, [fetch])
 
     const sendLittle = useDebouncedCallback((value: number) => save(() => client.setScoreLittle(value)), 150)
     const sendBig = useDebouncedCallback((value: number) => save(() => client.setScoreBig(value)), 150)
-    // both volumes are sent together: take the latest values of the local copy
     const sendVolumes = useDebouncedCallback(() => {
       const current = dataRef.current
       if (current) {

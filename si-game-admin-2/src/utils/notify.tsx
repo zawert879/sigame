@@ -5,7 +5,6 @@ import { isRequestError } from "@/client/errors"
 
 type MessageApi = ReturnType<typeof message.useMessage>[0]
 
-// Message API bound to the antd ConfigProvider (theme); the static `message` is the fallback before it mounts.
 let messageApi: MessageApi | null = null
 
 export const MessageHolder = () => {
@@ -30,7 +29,6 @@ export const errorText = (error: unknown, fallback = 'Что-то пошло н�
   return fallback
 }
 
-// Shows a failed user action as an antd error message: "<action>: <reason>".
 export const notifyError = (error: unknown, action?: string) => {
   const reason = errorText(error)
   getApi().error(action ? `${action}: ${reason}` : reason)

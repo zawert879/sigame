@@ -15,7 +15,6 @@ type Recorded = {
   args: unknown[];
 }
 
-// records every event the game emits
 function record(game: Game) {
   const events: Recorded[] = []
   const listeners = Object.fromEntries(Object.values(GameEvent).map(event => [event, (...args: unknown[]) => {
@@ -79,7 +78,6 @@ const finalQuestion = (game: Game, themeName: string): Question => {
   return found
 }
 
-// Screensaver → ThemeList → RoundName → ThemeListInRound → Table
 async function tableGame(file = siq5): Promise<Game> {
   const game = newGame()
   await game.loadPack(file)
@@ -91,7 +89,6 @@ async function tableGame(file = siq5): Promise<Game> {
   return game
 }
 
-// selects the question and presses next until the game leaves it
 function play(game: Game, target: Question) {
   game.selectQuestion(target.id)
   for (let step = 0; step < 20 && (game.screen === Screen.QuestionPreparation || game.screen === Screen.Question); step++) {
@@ -139,7 +136,6 @@ describe('Game: screens', () => {
     expect(game.packageName).toBe('Тестовый пак')
     expect(recorder.of(GameEvent.StartScreensaver)).toHaveLength(1)
     expect(seen).toEqual([['Audio/song.mp3', 'Images/answer.png', 'Images/b.png', 'Images/pic 1.png', 'Video/clip.mp4']])
-    // <PACKAGES_DIR>/run-<pid>-<uuid>/<gameId>: the media directory of this process
     expect(game.packDir).toBe(path.join(mediaDir, game.id))
     expect(path.dirname(mediaDir)).toBe(process.env.PACKAGES_DIR)
     expect(path.basename(mediaDir)).toMatch(new RegExp(`^run-${process.pid}-[\\da-f-]{36}$`))
@@ -256,7 +252,6 @@ describe('Game: screens', () => {
       game.selectQuestion('nope')
     }).toThrow(GameError)
 
-    // a question of another round is unknown too
     game.nextRound()
     const firstRoundQuestion = game.package!.rounds[0].questions[0]
     expect(() => {
@@ -310,7 +305,6 @@ describe('Game: screens', () => {
     expect(recorder.names()).toEqual([GameEvent.StartTable])
     expect(game.progress.questionsPlayed).toBe(1)
 
-    // an eliminated theme cannot be chosen again
     recorder.clear()
     game.selectQuestion(f1.id)
     expect(recorder.events).toEqual([])
@@ -325,7 +319,6 @@ describe('Game: screens', () => {
     expect(game.package?.currentQuestion).toBe(f3)
     expect(game.score.value).toBe(0)
     expect(recorder.names()).toContain(GameEvent.StartQuestion)
-    // buttons work in the final question
     expect(game.isButtonsActive).toBe(true)
     game.playerUsedButton('KeyA')
     expect(game.queuePlayersIds).toHaveLength(1)
@@ -337,7 +330,6 @@ describe('Game: screens', () => {
     expect(game.getResultsPayload().isLastRound).toBe(true)
     expect(game.progress).toEqual({ roundIndex: 1, roundsCount: 2, questionsPlayed: 3, questionsTotal: 3 })
 
-    // the Results of the last round are the end of the game
     recorder.clear()
     game.next()
     game.nextRound()
@@ -370,19 +362,16 @@ describe('Game: screens', () => {
     expect(game.isButtonsActive).toBe(false)
     expect(recorder.names()).toEqual([GameEvent.StartRoundName])
 
-    // the last round: nothing happens
     recorder.clear()
     game.nextRound()
     expect(recorder.events).toEqual([])
 
     game.previousRound()
     expect(game.package?.roundIndex).toBe(0)
-    // the first round has no previous one: the RoundName is shown again
     game.previousRound()
     expect(game.package?.roundIndex).toBe(0)
     expect(game.screen).toBe(Screen.RoundName)
 
-    // a question that was left open stays available
     expect(question(game, 100).isAvailable).toBe(true)
   })
 
@@ -406,7 +395,7 @@ describe('Game: question controls', () => {
     game.playerUsedButton('KeyA')
     game.next()
     game.next()
-    game.winPlayer(game.players[0].id) // stays on the question, answer shown
+    game.winPlayer(game.players[0].id)
     const recorder = record(game)
 
     game.repeatQuestion()
@@ -435,7 +424,7 @@ describe('Game: question controls', () => {
     game.repeatQuestion()
     game.selectQuestion(question(game, 200).id)
     recorder.clear()
-    game.repeatQuestion() // QuestionPreparation
+    game.repeatQuestion()
     expect(recorder.events).toEqual([])
     expect(game.screen).toBe(Screen.QuestionPreparation)
   })
@@ -460,7 +449,6 @@ describe('Game: question controls', () => {
     expect(recorder.names()).toEqual([GameEvent.QueuePlayersUpdated, GameEvent.StartTable])
     expect(game.getTablePayload().themes[0].questions.find(item => item.id === q100.id)?.isAvailable).toBe(true)
 
-    // the same question can be opened again
     game.selectQuestion(q100.id)
     expect(game.screen).toBe(Screen.Question)
     expect(q100.pageIndex).toBe(0)
@@ -511,12 +499,12 @@ describe('Game: players', () => {
     const vasya = addPlayer(game, 'Вася', 'KeyA')
     const petya = addPlayer(game, 'Петя', 'KeyB')
 
-    game.playerUsedButton('KeyA') // Table
+    game.playerUsedButton('KeyA')
     expect(game.queuePlayersIds).toEqual([])
 
-    game.selectQuestion(question(game, 200).id) // QuestionPreparation
+    game.selectQuestion(question(game, 200).id)
     game.playerUsedButton('KeyA')
-    game.next() // Question of a special type
+    game.next()
     game.playerUsedButton('KeyA')
     expect(game.queuePlayersIds).toEqual([])
     game.cancelQuestion()
@@ -524,12 +512,11 @@ describe('Game: players', () => {
     game.selectQuestion(question(game, 100).id)
     game.playerUsedButton('KeyB')
     game.playerUsedButton('KeyA')
-    game.playerUsedButton('KeyB') // already queued
-    game.playerUsedButton('KeyZ') // nobody
+    game.playerUsedButton('KeyB')
+    game.playerUsedButton('KeyZ')
     expect(game.queuePlayersIds).toEqual([petya.id, vasya.id])
     expect(game.playersWithQueue.map(player => [player.name, player.queue])).toEqual([['Вася', 1], ['Петя', 0]])
 
-    // after the question the buttons are off again
     game.next()
     game.next()
     game.next()
@@ -558,11 +545,9 @@ describe('Game: players', () => {
     expect(petya.score).toBe(250)
     expect(petya.winCount).toBe(1)
     expect(game.currentSelector).toBe(petya.id)
-    // the answer page is shown
     expect(q100.pageIndex).toBe(2)
     expect(recorder.names()).toContain(GameEvent.UpdatePage)
 
-    // unknown players are ignored
     game.winPlayer('nope')
     game.losePlayer('nope')
     expect(game.currentSelector).toBe(petya.id)
@@ -572,10 +557,9 @@ describe('Game: players', () => {
     const game = await tableGame()
     const vasya = addPlayer(game, 'Вася', 'KeyA')
     const q500 = question(game, 500)
-    game.selectQuestion(q500.id) // noRisk: QuestionPreparation first
+    game.selectQuestion(q500.id)
     game.next()
     expect(game.screen).toBe(Screen.Question)
-    // question: 3 pages; answer: the marker page with the text and a page with an image
     expect(q500.pages?.map(item => item.isMarker)).toEqual([false, false, false, true, false])
 
     const recorder = record(game)
@@ -586,7 +570,6 @@ describe('Game: players', () => {
 
     game.next()
     expect(q500.currentPage).toEqual(expect.objectContaining({ image: 'answer.png' }))
-    // the answer is already shown: nothing moves back
     recorder.clear()
     game.winPlayer(vasya.id)
     expect(q500.pageIndex).toBe(4)
@@ -619,7 +602,6 @@ describe('Game: players', () => {
     expect(recorder.of(GameEvent.UpdatePlayers).map(([event]) => event)).toEqual([
       update({ id: vasya.id, score: 50, queue: 1 }, petya.id),
       update({ id: vasya.id, name: 'Василий', queue: 1 }, petya.id),
-      // the winner chooses the next question; the queue is kept until the question ends
       update({ id: vasya.id, score: 150, win: 1, queue: 1 }, vasya.id),
     ])
   })
@@ -646,14 +628,14 @@ describe('Game: players', () => {
     expect(game.currentSelector).toBe(petya.id)
 
     game.next()
-    game.selectPlayer(vasya.id) // the host may queue a player even with the buttons off
+    game.selectPlayer(vasya.id)
     expect(game.queuePlayersIds).toEqual([vasya.id])
     expect(game.currentSelector).toBe(petya.id)
 
     game.selectPlayer('nope')
     expect(game.queuePlayersIds).toEqual([vasya.id])
 
-    game.nextRound() // RoundName
+    game.nextRound()
     game.selectPlayer(vasya.id)
     expect(game.currentSelector).toBe(petya.id)
   })
@@ -680,7 +662,6 @@ describe('Game: players', () => {
     expect(game.currentSelector).toBeNull()
     expect(game.queuePlayersIds).toEqual([kolya.id])
     expect(game.players).toEqual([kolya])
-    // the removed player's key does nothing
     game.playerUsedButton('KeyA')
     expect(game.queuePlayersIds).toEqual([kolya.id])
   })
@@ -711,11 +692,9 @@ describe('Game: packs', () => {
     expect(game.progress).toEqual({ roundIndex: 0, roundsCount: 1, questionsPlayed: 0, questionsTotal: 5 })
     expect(game.players).toEqual([vasya])
     expect([vasya.score, vasya.winCount, vasya.name]).toEqual([100, 1, 'Вася'])
-    // only the reset and the new screen, no screen of the old pack
     expect(recorder.names().filter(name => name.startsWith('Start'))).toEqual([GameEvent.StartScreensaver])
     expect(recorder.of(GameEvent.UpdateScoreValue)).toEqual([[0]])
 
-    // the media of the previous pack are gone
     expect(listFiles(game.packDir)).toEqual(['Audio/ans.mp3', 'Images/cat.png'])
   })
 
@@ -747,7 +726,6 @@ describe('Game: packs', () => {
     expect(game.package?.currentQuestion).toBe(q100)
     expect(fs.existsSync(path.join(game.packDir, 'Images', 'pic 1.png'))).toBe(true)
 
-    // not stuck in "loading"
     await game.loadPack(siq4)
     expect(game.packageName).toBe('SIQ4 пак')
   })
@@ -757,7 +735,6 @@ describe('Game: packs', () => {
     await game.loadPack(evil)
     expect(game.screen).toBe(Screen.Screensaver)
     expect(listFiles(game.packDir)).toEqual(['Images/%E0%A4%A.png', 'Images/100%.png', 'Images/ok file.png', 'Images/sub/deep.png', 'sibling.mp3'])
-    // nothing below PACKAGES_DIR outside the directories of the games
     const gameDirs = new Set(games.map(item => path.relative(process.env.PACKAGES_DIR!, item.packDir).split(path.sep).join('/')))
     expect(listFiles(process.env.PACKAGES_DIR!).filter(file => !gameDirs.has(file.split('/').slice(0, 2).join('/')))).toEqual([])
     expect(fs.existsSync(path.join(path.dirname(evil), 'absolute-escape.txt'))).toBe(false)
@@ -844,8 +821,8 @@ describe('Game: snapshots', () => {
       payload: {
         id: secret.id,
         comments: null,
-        currentPage: { text: 'Кот в мешке', replic: null, image: null, video: null, voice: null, html: null, isMarker: false },
-        nextPage: { text: 'B', replic: null, image: null, video: null, voice: null, html: null, isMarker: true },
+        currentPage: { text: 'Кот в мешке', replic: null, image: null, video: null, voice: null, html: null, htmlFile: null, isMarker: false },
+        nextPage: { text: 'B', replic: null, image: null, video: null, voice: null, html: null, htmlFile: null, isMarker: true },
         pageIndex: 0,
         pagesCount: 2,
         isAvailable: true,
@@ -872,7 +849,7 @@ describe('Game: snapshots', () => {
     expect(questionScreen.payload).toEqual(game.getQuestionPayload(secret))
     game.next()
     expect(game.getQuestionPagePayload()).toEqual({
-      currentPage: { text: 'B', replic: null, image: null, video: null, voice: null, html: null, isMarker: true },
+      currentPage: { text: 'B', replic: null, image: null, video: null, voice: null, html: null, htmlFile: null, isMarker: true },
       nextPage: null,
       pageIndex: 1,
       pagesCount: 2,
@@ -893,9 +870,9 @@ describe('Game: snapshots', () => {
   test('getSnapshot and getSettings', async () => {
     const game = await tableGame()
     const vasya = addPlayer(game, 'Вася', 'KeyA')
-    game.score.setBig(200)
-    game.score.setLittle(50)
-    game.setting.playerVolume = 30
+    game.setScoreBig(200)
+    game.setScoreLittle(50)
+    game.setVolumeSettings(30, 100)
 
     expect(game.getSnapshot()).toEqual({
       gameId: game.id,
@@ -911,13 +888,38 @@ describe('Game: snapshots', () => {
     expect(game.getSettings()).toEqual({ scoreValue: 0, big: 200, little: 50, adminVolume: 100, playerVolume: 30 })
   })
 
+  test('setScoreLittle, setScoreBig and setVolumeSettings change the settings and emit UpdateSettings each time', () => {
+    const game = newGame()
+    const recorder = record(game)
+
+    game.setScoreLittle(30)
+    expect(game.getSettings()).toEqual({ scoreValue: 0, big: 100, little: 30, adminVolume: 100, playerVolume: 100 })
+    game.setScoreBig(300)
+    expect(game.getSettings()).toMatchObject({ big: 300, little: 30 })
+    game.setVolumeSettings(10, 0)
+    expect(game.getSettings()).toEqual({ scoreValue: 0, big: 300, little: 30, adminVolume: 0, playerVolume: 10 })
+    game.setScoreBig(300)
+
+    expect(recorder.names()).toEqual([GameEvent.UpdateSettings, GameEvent.UpdateSettings, GameEvent.UpdateSettings, GameEvent.UpdateSettings])
+    expect(recorder.of(GameEvent.UpdateSettings)).toEqual([[], [], [], []])
+  })
+
+  test('score steps and value changes are not settings changes', () => {
+    const game = newGame()
+    const recorder = record(game)
+    game.score.bigPlus()
+    game.score.littleMinus()
+    game.score.setValue(5)
+    expect(recorder.of(GameEvent.UpdateSettings)).toEqual([])
+    expect(recorder.of(GameEvent.UpdateScoreValue)).toEqual([[100], [80], [5]])
+  })
+
   test('without a current question the question screens fall back to the Table payload', async () => {
     const game = await tableGame()
     game.selectQuestion(question(game, 100).id)
     game.package!.setCurrentQuestion(null)
     expect(game.getScreenData().screen).toBe(Screen.Table)
     expect(game.getQuestionPagePayload()).toEqual({ currentPage: null, nextPage: null, pageIndex: 0, pagesCount: 0 })
-    // next on a question screen without a question goes back to the table
     game.next()
     expect(game.screen).toBe(Screen.Table)
   })

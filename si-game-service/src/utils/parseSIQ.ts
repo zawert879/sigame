@@ -6,10 +6,11 @@ import { textOf } from './siqValue'
 
 const CONTENT_FILE = 'content.xml'
 
-const assetFolders: Array<[prefix: string, key: 'images' | 'audios' | 'videos' | 'texts']> = [
+const assetFolders: Array<[prefix: string, key: 'images' | 'audios' | 'videos' | 'htmls' | 'texts']> = [
   ['Images/', 'images'],
   ['Audio/', 'audios'],
   ['Video/', 'videos'],
+  ['Html/', 'htmls'],
   ['Texts/', 'texts'],
 ]
 
@@ -17,7 +18,6 @@ const createXmlParser = () => new XMLParser({
   ignoreAttributes: false,
   attributesGroupName: 'attributes',
   attributeNamePrefix: '',
-  // keep texts as strings: '007' must not become 7 (audit B10)
   parseTagValue: false,
 })
 
@@ -40,7 +40,6 @@ function readContentEntry(zip: AdmZip, filePath: string): AdmZip.IZipEntry {
   return entry
 }
 
-// Reads a whole .siq archive. Throws when the file is not a zip or content.xml is missing/invalid.
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export function parseSIQ(filePath: string): Data {
   const zip = new AdmZip(filePath)
@@ -49,6 +48,7 @@ export function parseSIQ(filePath: string): Data {
     images: new Map(),
     audios: new Map(),
     videos: new Map(),
+    htmls: new Map(),
     content: parseContent(readContentEntry(zip, filePath), filePath),
   }
 
@@ -67,7 +67,6 @@ export function parseSIQ(filePath: string): Data {
   return data
 }
 
-// Pack name from content.xml ('' when the pack has no name). Throws for an unreadable pack.
 export function readSiqName(filePath: string): string {
   const zip = new AdmZip(filePath)
   const content = parseContent(readContentEntry(zip, filePath), filePath)

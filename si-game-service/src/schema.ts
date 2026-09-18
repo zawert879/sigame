@@ -23,9 +23,6 @@ import type {
 } from './types'
 import { isPackFileName } from './utils/packFiles'
 
-// Validation of socket request payloads (common/types.ts Request*).
-// Each schema is typed with its Request type, so the contract and the validation cannot drift apart.
-
 const id = z.string().max(100)
 const name = z.string().trim().max(200)
 const finiteNumber = z.number().finite()

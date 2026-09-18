@@ -1,7 +1,6 @@
 import { FC } from "react";
 import { useGameStore } from "@/store/game";
 
-// Current question price on the player screen.
 const QuestionScore: FC = () => {
   const scoreValue = useGameStore(state => state.scoreValue)
 

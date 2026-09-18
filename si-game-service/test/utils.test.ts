@@ -2,11 +2,11 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { parseByteRange } from '../src/api/files'
-// type-only: config and auth are loaded by the tests below, after the environment is set
 import type * as authModule from '../src/auth'
 import type * as configModule from '../src/config'
 import * as Schema from '../src/schema'
 import { findPackFile, isPackFileName, uploadFileName } from '../src/utils/packFiles'
+import { isPageRequest } from '../src/utils/pageRoutes'
 import { isInsideDir, safeDecodeUriComponent } from '../src/utils/paths'
 import { numberOf, textList, textOf, toArray } from '../src/utils/siqValue'
 import { makeTempDir } from './helpers/fixtures'
@@ -21,7 +21,6 @@ describe('paths', () => {
     expect(isInsideDir(dir, path.join(dir, '..', 'g2', 'a.png'))).toBe(false)
     expect(isInsideDir(dir, `${dir}-other`)).toBe(false)
     expect(isInsideDir(dir, path.resolve('/etc/passwd'))).toBe(false)
-    // a name that merely starts with '..' is fine
     expect(isInsideDir(dir, path.join(dir, '..name'))).toBe(true)
   })
 
@@ -30,6 +29,35 @@ describe('paths', () => {
     expect(safeDecodeUriComponent('..%2F..%2Fx')).toBe('../../x')
     expect(safeDecodeUriComponent('100%.png')).toBe('100%.png')
     expect(safeDecodeUriComponent('%E0%A4%A')).toBe('%E0%A4%A')
+  })
+})
+
+describe('isPageRequest (SPA fallback)', () => {
+  test.each([
+    '/',
+    '/admin',
+    '/admin/',
+    '/admin/5f0e2d1c-1b2a-4c3d-8e9f-0a1b2c3d4e5f',
+    '/player/5f0e2d1c-1b2a-4c3d-8e9f-0a1b2c3d4e5f/',
+    '/a.b/x',
+    '/unknown/deep/path',
+  ])('%s is a page', requestPath => {
+    expect(isPageRequest(requestPath)).toBe(true)
+  })
+
+  test.each([
+    '/_next/static/chunks/main.js',
+    '/_next/data/build/admin.json',
+    '/_next/image',
+    '/favicon.ico',
+    '/admin/app.js',
+    '/player/id/picture.PNG',
+    '/fonts/inter.woff2/',
+    '/api/packs',
+    '/api',
+    '/socket.io/',
+  ])('%s is not a page', requestPath => {
+    expect(isPageRequest(requestPath)).toBe(false)
   })
 })
 
@@ -187,7 +215,6 @@ describe('config (read from the environment at import time)', () => {
     try {
       let modules: { config: ConfigModule; auth: AuthModule } | undefined
       jest.isolateModules(() => {
-        // a fresh copy of the modules has to be loaded synchronously, inside isolateModules
         // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
         modules = { config: require('../src/config') as ConfigModule, auth: require('../src/auth') as AuthModule }
       })
@@ -207,11 +234,19 @@ describe('config (read from the environment at import time)', () => {
     expect(load({ PORT: '1.5' }).config.PORT).toBe(4000)
   })
 
+  test('isPortExplicit: only a valid PORT from the environment is explicit', () => {
+    expect(load({ PORT: undefined }).config.isPortExplicit).toBe(false)
+    expect(load({ PORT: ' ' }).config.isPortExplicit).toBe(false)
+    expect(load({ PORT: 'abc' }).config.isPortExplicit).toBe(false)
+    expect(load({ PORT: '4000' }).config).toMatchObject({ PORT: 4000, isPortExplicit: true })
+    expect(load({ PORT: '0' }).config).toMatchObject({ PORT: 0, isPortExplicit: true })
+    expect(load({}).config.DEFAULT_PORT).toBe(4000)
+  })
+
   test('directories are resolved from the environment', () => {
     const { config } = load({ SIQ_DIR: 'relative/siq', PACKAGES_DIR: '/abs/packages', FRONTEND_STATIC_DIR: ' ' })
     expect(config.SIQ_DIR).toBe(path.resolve('relative/siq'))
     expect(config.PACKAGES_DIR).toBe(path.resolve('/abs/packages'))
-    // blank → the default next to the compiled server
     expect(config.FRONTEND_STATIC_DIR).toBe(path.resolve(__dirname, '..', 'src', '..', '..', 'public'))
   })
 
@@ -235,7 +270,6 @@ describe('config (read from the environment at import time)', () => {
   })
 
   test('ADMIN_TOKEN: surrounding whitespace is not part of the token', () => {
-    // cmd: `set ADMIN_TOKEN=secret && sigame.exe` stores 'secret '; the client trims ?token=
     const { config, auth } = load({ ADMIN_TOKEN: ' secret \t' })
     expect(config.ADMIN_TOKEN).toBe('secret')
     expect(auth.isAdminToken('secret')).toBe(true)
@@ -251,7 +285,6 @@ describe('config (read from the environment at import time)', () => {
 
     expect(config.defaultDataDir(false, executable)).toBe(process.cwd())
 
-    // packaged (a macOS binary started from Finder runs with cwd = $HOME): a per-user data directory
     const dataHome = makeTempDir('data-')
     const userDirs: Partial<Record<NodeJS.Platform, [string, string]>> = {
       darwin: ['HOME', path.join(os.homedir(), 'Library', 'Application Support', 'SIGame')],
@@ -276,7 +309,6 @@ describe('config (read from the environment at import time)', () => {
 
     expect(fs.existsSync(path.join(executableDir, 'siq'))).toBe(false)
 
-    // a portable copy / packs of an older sigame.exe next to the executable
     fs.mkdirSync(path.join(executableDir, 'siq'))
     expect(config.defaultDataDir(true, executable)).toBe(executableDir)
   })

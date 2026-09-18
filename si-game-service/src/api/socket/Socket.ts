@@ -12,7 +12,6 @@ export class Socket {
     return this.socket
   }
 
-  // auth.token sent by the client on connection (socket.io `auth` option)
   public get authToken(): unknown {
     const { auth } = this.socket.handshake as { auth: unknown }
     return typeof auth === 'object' && auth !== null ? (auth as Record<string, unknown>).token : undefined

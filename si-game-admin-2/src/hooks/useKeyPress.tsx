@@ -25,16 +25,18 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable
 }
 
-// Modifier keys pressed on their own: a player's button may be one of them (e.g. left / right Ctrl for two players
-// sharing a keyboard). Their own keydown already reports the modifier as held (Control → ctrlKey, AltGr → ctrlKey + altKey).
 const MODIFIER_KEYS = new Set(['Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'Super', 'Hyper', 'Shift'])
 
-// A Ctrl / Cmd / Alt combination with another key, e.g. Ctrl+R.
+export const NO_BUZZER_ATTRIBUTE = 'data-no-buzzer'
+
+const ACTIVATION_KEYS = new Set(['Enter', ' '])
+
+const activatesControl = (e: globalThis.KeyboardEvent): boolean =>
+    ACTIVATION_KEYS.has(e.key) && e.target instanceof Element && e.target.closest(`[${NO_BUZZER_ATTRIBUTE}]`) !== null
+
 const isShortcut = (e: globalThis.KeyboardEvent): boolean =>
     (e.ctrlKey || e.metaKey || e.altKey) && !MODIFIER_KEYS.has(e.key)
 
-// Player buttons: every key press on the page is sent to the server, which matches it with a player by `code`.
-// Typing into form fields, auto-repeat and shortcuts are not button presses; a modifier key alone is.
 export const KeyPressProvider: React.FC<PropsWithChildren> = ({ children }) => {
     const [isEnable, setIsEnable] = useState<boolean>(true)
     const isEnableRef = useRef(isEnable)
@@ -45,7 +47,7 @@ export const KeyPressProvider: React.FC<PropsWithChildren> = ({ children }) => {
 
     useEffect(() => {
         const keyDownHandler = (e: globalThis.KeyboardEvent) => {
-            if (!isEnableRef.current || e.repeat || isShortcut(e) || isEditableTarget(e.target)) {
+            if (!isEnableRef.current || e.repeat || isShortcut(e) || isEditableTarget(e.target) || activatesControl(e)) {
                 return
             }
             client.keyPress(e.key, e.code)

@@ -39,6 +39,7 @@ export type Events = {
   [GameEvent.StartThemeListInRound]: () => void;
   [GameEvent.StartResults]: () => void;
   [GameEvent.UpdateScoreValue]: (value: number) => void;
+  [GameEvent.UpdateSettings]: () => void;
   [GameEvent.UpdatePage]: () => void;
   [GameEvent.Exit]: () => void;
   [GameEvent.UpdateMediaPlayer]: (event: EventUpdateMediaPlayer) => void;
@@ -48,7 +49,6 @@ export type GameListeners = Partial<Events>
 
 export type ScreenData = ResponseGetGame['screenData']
 
-// event emitted when the game switches to a screen
 const screenEvents: Record<Screen, GameEvent | null> = {
   [Screen.Initial]: null,
   [Screen.Screensaver]: GameEvent.StartScreensaver,
@@ -61,10 +61,6 @@ const screenEvents: Record<Screen, GameEvent | null> = {
   [Screen.Results]: GameEvent.StartResults,
 }
 
-// Screen flow (next):
-// Initial ─selectPack→ Screensaver → ThemeList → RoundName → ThemeListInRound → Table
-// Table ─selectQuestion→ [QuestionPreparation →] Question → …pages… → Table | Results (round is over)
-// Results → RoundName of the next round; on the last round Results is final.
 export class Game {
   readonly id: string
   private readonly _eventEmitter = new EventEmitter()
@@ -147,7 +143,6 @@ export class Game {
     return this._queuePlayers.queue
   }
 
-  // directory with the extracted media of the current pack
   public get packDir(): string {
     return gameMediaDir(this.id)
   }
@@ -200,15 +195,10 @@ export class Game {
     }
   }
 
-  // ---- pack ----
-
-  // file is a pack name inside siqDir
   public async startGame(file: string): Promise<void> {
     await this.loadPack(path.join(siqDir, file))
   }
 
-  // Parses the pack, extracts its media into packages/<gameId> and only then switches to the Screensaver.
-  // Players and their scores are kept; everything else about the previous pack is reset.
   public async loadPack(filePath: string): Promise<void> {
     if (this._isClosed) {
       throw new GameError('Игра уже закрыта')
@@ -227,7 +217,6 @@ export class Game {
       await SiqPackage.saveAssets(siq, this.packDir)
 
       if (this._isClosed) {
-        // the game was closed while the media were being written
         await fs.rm(this.packDir, RM_OPTIONS)
         throw new GameError('Игра уже закрыта')
       }
@@ -244,8 +233,6 @@ export class Game {
       this._isLoadingPack = false
     }
   }
-
-  // ---- screens ----
 
   public next(): void {
     switch (this._screen) {
@@ -280,7 +267,6 @@ export class Game {
       }
 
       case Screen.Results: {
-        // Results of the last round are the end of the game: nothing comes next
         if (this._package && !this._package.isLastRound) {
           this.nextRound()
         }
@@ -289,7 +275,6 @@ export class Game {
       }
 
       default: {
-        // Initial and Table wait for selectPack / selectQuestion
         break
       }
     }
@@ -314,8 +299,6 @@ export class Game {
     this.setScreen(Screen.RoundName)
   }
 
-  // ---- questions ----
-
   public selectQuestion(questionId: string): void {
     if (!this._package) {
       throw new GameError('Пак не выбран')
@@ -327,13 +310,11 @@ export class Game {
       throw new GameError('Вопрос не найден в текущем раунде')
     }
 
-    // a question is chosen from the table only; a repeated click or a played question is ignored
     if (this._screen !== Screen.Table || !question.isAvailable) {
       return
     }
 
     if (round.type === RoundType.FINAL) {
-      // final round: themes are removed one by one, the last remaining one is played as a normal question
       if (round.themes.filter(theme => theme.hasAvailableQuestions).length > 1) {
         question.markPlayed()
         this.setScreen(Screen.Table)
@@ -352,7 +333,6 @@ export class Game {
     this.openQuestion(question)
   }
 
-  // Question screen: start the current question again from the first page
   public repeatQuestion(): void {
     const question = this._package?.currentQuestion
     if (this._screen !== Screen.Question || !question) {
@@ -366,7 +346,6 @@ export class Game {
     this._eventEmitter.emit(GameEvent.UpdatePage)
   }
 
-  // Question / QuestionPreparation: back to the table, the question stays available
   public cancelQuestion(): void {
     if (this._screen !== Screen.Question && this._screen !== Screen.QuestionPreparation) {
       return
@@ -376,8 +355,6 @@ export class Game {
     this.setScreen(Screen.Table)
   }
 
-  // ---- players ----
-
   public playerUsedButton(key: string) {
     const player = this.getPlayerByKey(key)
     if (player && this._isButtonsActive) {
@@ -385,7 +362,6 @@ export class Game {
     }
   }
 
-  // Question: put the player into the answer queue; Table / QuestionPreparation: make them the selector
   public selectPlayer(id: string) {
     const player = this.getPlayer(id)
     if (!player) {
@@ -419,7 +395,6 @@ export class Game {
       this._currentSelector = null
     }
 
-    // positions of the remaining players are pushed with QueuePlayersUpdated
     this._queuePlayers.removePlayer(id)
     this._eventEmitter.emit(GameEvent.UpdatePlayers, {
       added: [],
@@ -455,7 +430,6 @@ export class Game {
     return this._players.get(id)
   }
 
-  // right answer: add the score value, show the answer (from its first page), the player chooses the next question
   public winPlayer(id: string): void {
     const player = this._players.get(id)
     if (!player) {
@@ -488,8 +462,6 @@ export class Game {
     return this._package?.getAllThemes() ?? []
   }
 
-  // ---- snapshots sent to clients ----
-
   public getSnapshot(): ResponseGetGame {
     return {
       gameId: this.id,
@@ -502,6 +474,22 @@ export class Game {
       progress: this.progress,
       screenData: this.getScreenData(),
     }
+  }
+
+  public setScoreLittle(value: number): void {
+    this._score.setLittle(value)
+    this._eventEmitter.emit(GameEvent.UpdateSettings)
+  }
+
+  public setScoreBig(value: number): void {
+    this._score.setBig(value)
+    this._eventEmitter.emit(GameEvent.UpdateSettings)
+  }
+
+  public setVolumeSettings(playerVolume: number, adminVolume: number): void {
+    this._settings.playerVolume = playerVolume
+    this._settings.adminVolume = adminVolume
+    this._eventEmitter.emit(GameEvent.UpdateSettings)
   }
 
   public getSettings(): ResponseGetSettings {
@@ -615,9 +603,6 @@ export class Game {
     }
   }
 
-  // ---- internals ----
-
-  // a player as clients see it, with the position in the answer queue
   private playerData(player: Player): PlayerType {
     return {
       id: player.id,
@@ -630,7 +615,6 @@ export class Game {
     }
   }
 
-  // the complete data of a changed player: a client merges it over its copy, so a partial one would erase fields
   private pushPlayerUpdate(player: Player) {
     if (!this._players.has(player.id)) {
       return
@@ -657,7 +641,6 @@ export class Game {
     this.setScreen(round && !round.hasAvailableQuestions ? Screen.Results : Screen.Table)
   }
 
-  // buttons work for normal questions and for the question of the final round
   private isButtonsQuestion(question: Question): boolean {
     return question.type === QuestionType.DEFAULT || this._package?.currentRound.type === RoundType.FINAL
   }
@@ -672,7 +655,6 @@ export class Game {
     this.setScreen(Screen.Question)
   }
 
-  // special question: the host sets the price / player first, buttons stay off
   private prepareQuestion(question: Question) {
     this._package?.setCurrentQuestion(question)
     question.restart()
@@ -703,13 +685,11 @@ export class Game {
       return
     }
 
-    // the last page was shown: the question is played
     question.markPlayed()
     this.leaveQuestion()
     this.showTableOrResults()
   }
 
-  // forget the current question (it keeps its played / available state)
   private leaveQuestion() {
     this._package?.currentQuestion?.restart()
     this._package?.setCurrentQuestion(null)

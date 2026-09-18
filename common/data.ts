@@ -1,6 +1,3 @@
-// Shared runtime enums of the socket protocol. Imported by both apps:
-// si-game-service/src/data.ts and si-game-admin-2/src/data.ts re-export this file.
-
 export enum SystemEvent {
   Connection = 'connection',
   Connect = 'connect',
@@ -45,6 +42,7 @@ export enum Event {
   OnStartThemeListInRound = 'onStartThemeListInRound',
   OnStartResults = 'onStartResults',
   OnUpdateScoreValue = 'onUpdateScoreValue',
+  OnUpdateSettings = 'onUpdateSettings',
   OnUpdateQuestionPage = 'onUpdateQuestionPage',
   OnExit = 'onExit',
 
@@ -109,7 +107,6 @@ export enum SelectionModeType {
   ANY = 'any',
 }
 
-// Error codes sent back in an AckError (see common/types.ts).
 export enum AckErrorCode {
   GameNotFound = 'GAME_NOT_FOUND',
   GameNotSelected = 'GAME_NOT_SELECTED',

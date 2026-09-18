@@ -1,7 +1,5 @@
 import { v4 as uuid } from 'uuid'
 
-// Called after every change of a player. The game pushes the update: only it knows the queue position and the
-// current selector, which are part of the player data sent to clients.
 export type PlayerChangeListener = (player: Player) => void
 
 export class Player {

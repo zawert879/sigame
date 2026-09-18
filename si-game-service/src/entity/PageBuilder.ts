@@ -1,9 +1,5 @@
 import { Page } from './Page'
 
-// Accumulates the content of one page; saveAndNextPage() stores it when anything was set.
-// A replic does not create a page by itself: it is attached to the next saved page of the same section (question or
-// answer). At the end of a section (endSection, finish) a replic that still waits gets a page of its own, so it is
-// never moved into the answer or lost.
 export class PageBuilder {
   private _pages: Page[] = []
 
@@ -13,6 +9,7 @@ export class PageBuilder {
   private _video: string | null = null
   private _voice: string | null = null
   private _html: string | null = null
+  private _htmlFile: string | null = null
 
   private _isMarker = false
 
@@ -61,6 +58,12 @@ export class PageBuilder {
     return this
   }
 
+  public setHtmlFile(htmlFile: string | null): this {
+    this._htmlFile = htmlFile
+    this._isNewPage = true
+    return this
+  }
+
   public setMarker(isMarker: boolean): this {
     this._isMarker = isMarker
     this._isNewPage = true
@@ -72,7 +75,6 @@ export class PageBuilder {
     return this
   }
 
-  // stores the pending page, or a waiting replic as a page of its own
   public endSection(): this {
     if (this._replic !== null) {
       this._isNewPage = true
@@ -99,6 +101,7 @@ export class PageBuilder {
     this._video = null
     this._voice = null
     this._html = null
+    this._htmlFile = null
     this._isMarker = false
     this._isNewPage = false
 
@@ -107,7 +110,6 @@ export class PageBuilder {
 
   private savePage() {
     if (!this._isNewPage) {
-      // nothing to save; a pending replic waits for the next page
       return
     }
 
@@ -118,6 +120,7 @@ export class PageBuilder {
       video: this._video,
       voice: this._voice,
       html: this._html,
+      htmlFile: this._htmlFile,
       isMarker: this._isMarker,
     }))
     this.refresh()

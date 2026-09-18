@@ -8,18 +8,16 @@ import { textList, textOf, toArray } from '../utils/siqValue'
 import { Round } from './Round'
 import type { Question } from './Question'
 
-const assetFolders: Array<[folder: 'Images' | 'Audio' | 'Video', key: 'images' | 'audios' | 'videos']> = [
+const assetFolders: Array<[folder: 'Images' | 'Audio' | 'Video' | 'Html', key: 'images' | 'audios' | 'videos' | 'htmls']> = [
   ['Images', 'images'],
   ['Audio', 'audios'],
   ['Video', 'videos'],
+  ['Html', 'htmls'],
 ]
 
-// how many asset files are decompressed and written at the same time
 const WRITE_CONCURRENCY = 8
 
 export class SiqPackage {
-  // Writes the pack media to <packDir>/<Images|Audio|Video>/<decoded entry name>.
-  // Entries that would land outside packDir are skipped; a failed file is logged, never thrown.
   static async saveAssets(siq: Data, packDir: string): Promise<void> {
     const root = path.resolve(packDir)
     const jobs: Array<{ entry: AdmZip.IZipEntry; target: string }> = []
@@ -139,7 +137,6 @@ export class SiqPackage {
     this._currentQuestion = question
   }
 
-  // false on the last round
   public nextRound(): boolean {
     if (this.isLastRound) {
       return false
@@ -150,13 +147,11 @@ export class SiqPackage {
     return true
   }
 
-  // stays on the first round when there is no previous one
   public previousRound(): void {
     this._roundIndex = Math.max(0, this._roundIndex - 1)
     this._currentQuestion = null
   }
 
-  // called when the pack is replaced or the game is closed
   public close(): void {
     this._currentQuestion = null
   }

@@ -25,7 +25,6 @@ export type GameMeta = {
   scoreLittle: number
 }
 
-// idle: no game requested yet; notFound: the server does not know the game id
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'notFound' | 'error'
 
 type GameData = {
@@ -46,12 +45,8 @@ type GameData = {
   scoreValue: number
   progress: GameProgress | null
   isLastRound: boolean
-  // volumes etc.: there is no push for settings, useGameConnection refetches them with the snapshot and on
-  // screen / page / media pushes
   settings: ResponseGetSettings | null
-  // player screen: the table cell that flashes before the question opens
   animatedQuestionId: string | null
-  // bumped when the current question starts over, so the page (and its media) remounts from the beginning
   questionRun: number
 }
 
@@ -107,7 +102,6 @@ const questionPageOf = (question: PayloadStartQuestion): PayloadQuestionPage => 
   pagesCount: question.pagesCount,
 })
 
-// Single source of truth for a game screen (admin or player). Every update is a pure state transition.
 export const useGameStore = create<GameState>()((set) => ({
   ...initialData(null),
 
@@ -134,7 +128,6 @@ export const useGameStore = create<GameState>()((set) => ({
       scoreValue: game.score,
       progress: game.progress,
     }
-    // the snapshot carries the current selector only on the table / question screens
     let currentSelector = state.currentSelector
     switch (screenData.screen) {
       case Screen.Table:
@@ -226,7 +219,6 @@ export const useGameStore = create<GameState>()((set) => ({
   restartQuestionMedia: () => set((state) => ({ questionRun: state.questionRun + 1 })),
 }))
 
-// 0..100 from the server settings → 0..1 for media elements; full volume until the settings are known.
 export const toMediaVolume = (value: number | null | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 1

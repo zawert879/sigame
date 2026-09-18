@@ -2,7 +2,6 @@ import type { EventUpdatePlayers, Player } from "@/types"
 
 export type PlayerView = Player & { isCurrent: boolean }
 
-// Applies an onUpdatePlayers delta (added / removed / updated) without mutating the input list.
 export const mergePlayers = (players: readonly Player[], update: EventUpdatePlayers): Player[] => {
   const removed = new Set(update.removed)
   const updated = new Map(update.updated.map(player => [player.id, player]))
@@ -25,6 +24,5 @@ export const mergePlayers = (players: readonly Player[], update: EventUpdatePlay
     })
 }
 
-// Marks the player who is choosing the next question.
 export const withCurrent = (players: readonly Player[], currentSelector: string | null): PlayerView[] =>
   players.map(player => ({ ...player, isCurrent: player.id === currentSelector }))

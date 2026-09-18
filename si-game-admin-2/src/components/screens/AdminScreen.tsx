@@ -16,7 +16,6 @@ import { FirstGameRedirect } from "./FirstGameRedirect"
 import { useGameConnection } from "@/hooks/useGameConnection"
 import { useGameStore } from "@/store/game"
 
-// Host's control panel (phone / tablet).
 export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> = ({ gameId, resolved }) => {
   const { refresh } = useGameConnection(gameId, 'admin')
   const loadedGameId = useGameStore(state => state.gameId)
@@ -33,7 +32,6 @@ export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> 
   const questionPage = useGameStore(state => state.questionPage)
   const isLastRound = useGameStore(state => state.isLastRound)
 
-  // "/admin" without an id: the host panel of the first game (a stable host link, e.g. "/admin?token=…")
   if (resolved && !gameId) {
     return <FirstGameRedirect route="admin" />
   }
@@ -42,7 +40,7 @@ export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> 
     return (
       <>
         <ConnectionBanner />
-        <GameStatusView status={loadedGameId === gameId ? status : 'loading'} error={error} />
+        <GameStatusView route="admin" status={loadedGameId === gameId ? status : 'loading'} error={error} />
       </>
     )
   }

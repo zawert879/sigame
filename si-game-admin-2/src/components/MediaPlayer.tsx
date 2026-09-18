@@ -30,7 +30,6 @@ const MediaPlayer: FC<{
   // eslint-disable-next-line react/display-name
 }> = memo(({ url, type }) => {
   const mediaRef = useRef<HTMLVideoElement>(null);
-  // volumes from the game settings (0..100): the player screen and the host device are set separately
   const volume = useGameStore((state) =>
     toMediaVolume(type === MediaPlayerType.Admin ? state.settings?.adminVolume : state.settings?.playerVolume)
   );
@@ -38,7 +37,6 @@ const MediaPlayer: FC<{
     const media = mediaRef.current
     if (media) {
       if (data.isPlaying) {
-        // autoplay may be blocked by the browser until the page gets a user gesture
         media.play()?.catch(() => undefined)
       } else {
         media.pause()

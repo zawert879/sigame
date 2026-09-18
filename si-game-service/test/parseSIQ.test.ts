@@ -20,8 +20,11 @@ describe('parseSIQ', () => {
       'Images/': '',
       'Audio/song.mp3': 'a',
       'Video/clip.mp4': 'v',
+      'Html/page%201.html': '<p>1</p>',
+      'Html/sub/inner.html': '<p>2</p>',
       'Texts/notes.txt': 't',
       'images/lower.png': PNG,
+      'html/lower.html': 'x',
       'Other/file.bin': 'x',
       'readme.txt': 'x',
     }))
@@ -29,6 +32,8 @@ describe('parseSIQ', () => {
     expect([...data.images.keys()].sort()).toEqual(['@pic%201.png', '@sub/deep.png'])
     expect([...data.audios.keys()]).toEqual(['@song.mp3'])
     expect([...data.videos.keys()]).toEqual(['@clip.mp4'])
+    expect([...data.htmls.keys()].sort()).toEqual(['@page%201.html', '@sub/inner.html'])
+    expect(data.htmls.get('@page%201.html')?.getData().toString()).toBe('<p>1</p>')
     expect([...data.texts.keys()]).toEqual(['@notes.txt'])
     expect(data.images.get('@pic%201.png')?.entryName).toBe('Images/pic%201.png')
     expect(data.audios.get('@song.mp3')?.getData().toString()).toBe('a')
@@ -36,7 +41,6 @@ describe('parseSIQ', () => {
 
   test('keeps numeric texts as strings (\'007\' is not 7)', () => {
     const { content } = parseSIQ(pack(siq5Entries()))
-    // raw parser output: a single element is an object, repeated elements are an array
     type Question100 = { attributes: { price: string }; params: { param: { item: unknown[] } } }
     type Question200 = { params: { param: Array<{ attributes: { name: string }; item: unknown }> }; right: { answer: unknown } }
     type RawPackage = {

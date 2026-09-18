@@ -7,11 +7,8 @@ export interface ProgressValue {
 }
 
 export interface ProgressProps {
-  // rounds of the pack
   game: ProgressValue;
-  // played questions of the current round
   round: ProgressValue;
-  // pages of the current question
   question: ProgressValue;
 }
 

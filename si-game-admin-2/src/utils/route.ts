@@ -18,18 +18,16 @@ export const getRouteId = (queryId: string | string[] | undefined, routeName: st
   return routeIndex >= 0 ? segments[routeIndex + 1] : undefined
 }
 
-// Game id of /admin/<id> and /player/<id>. In production both are served by the SPA fallback as admin.html /
-// player.html, so the id comes from window.location; in `next dev` the [id] pages get it from the query.
-// `resolved` turns true after mount, so the prerendered markup never depends on the id.
 export const useRouteGameId = (routeName: RouteName): { gameId: string | undefined, resolved: boolean } => {
   const router = useRouter()
   const queryId = router.query.id
+  const asPath = router.asPath
   const [state, setState] = useState<{ gameId: string | undefined, resolved: boolean }>({ gameId: undefined, resolved: false })
 
   useEffect(() => {
     const gameId = getRouteId(queryId, routeName) || undefined
     setState(prev => (prev.resolved && prev.gameId === gameId ? prev : { gameId, resolved: true }))
-  }, [queryId, routeName])
+  }, [queryId, routeName, asPath])
 
   return state
 }

@@ -3,10 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import type { PageSnapshotType } from '../../src/types'
 
-// .siq packs are built on the fly: zip entry name → content
 export type ZipEntries = Record<string, string | Buffer>
 
-// a question page snapshot: the given fields, everything else empty
 export const page = (fields: Partial<PageSnapshotType>): PageSnapshotType => ({
   text: null,
   replic: null,
@@ -14,19 +12,13 @@ export const page = (fields: Partial<PageSnapshotType>): PageSnapshotType => ({
   video: null,
   voice: null,
   html: null,
+  htmlFile: null,
   isMarker: false,
   ...fields,
 })
 
-// the server never decodes media, a PNG signature is enough
 export const PNG = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex')
 
-// SIQ 5 (params): two rounds, the second one is final.
-// Round 1 has 6 questions, one of them with a negative price (never played):
-//   Тема 1: 100 default ('007' + image) · 200 stake (answer '1984', price numberSet) · -1 negative
-//   Тема 2: 300 single-option answer group · 400 secret (theme / selectionMode / price, 3 options incl. an image)
-//   Тема 3: 500 noRisk (replic, audio shown together with a text, video, html, answer content with an image)
-// Финал: Ф1, Ф2, Ф3 with one question each
 export const SIQ5_XML = `<?xml version="1.0" encoding="utf-8"?>
 <package name="Тестовый пак" version="5" id="t5" date="18.09.2026" publisher="Издатель" difficulty="5" language="ru-RU" xmlns="https://github.com/VladimirKhil/SI/blob/master/assets/siq_5.xsd">
   <tags><tag>тест</tag><tag>1984</tag></tags>
@@ -125,9 +117,6 @@ export const SIQ5_XML = `<?xml version="1.0" encoding="utf-8"?>
   </rounds>
 </package>`
 
-// SIQ 4 (type + scenario): one round.
-//   Т1: 100 atoms with '@image', say, marker, voice after the marker · 200 cat (theme, cost) · 300 auction ('007', URL video)
-//   Т2: 400 sponsored (marker without answer atoms) · 500 bagcat (cost 0, self, html)
 export const SIQ4_XML = `<?xml version="1.0" encoding="utf-8"?>
 <package name="SIQ4 пак" version="4" id="t4" xmlns="http://vladimirkhil.com/ygpackage3.0.xsd">
   <info><authors><author>Автор В</author></authors></info>
@@ -190,7 +179,6 @@ export const SIQ4_XML = `<?xml version="1.0" encoding="utf-8"?>
   </rounds>
 </package>`
 
-// content.xml with one round and one theme holding the given <question> elements
 export function packageXml(questionsXml: string, options: { name?: string; roundType?: string } = {}): string {
   const name = options.name ?? 'Пак'
   const roundType = options.roundType ? ` type="${options.roundType}"` : ''
@@ -208,7 +196,6 @@ export function packageXml(questionsXml: string, options: { name?: string; round
 </package>`
 }
 
-// SIQ 5 media are stored URI-encoded: 'pic%201.png' is referenced as 'pic 1.png'
 export const siq5Entries = (): ZipEntries => ({
   'content.xml': SIQ5_XML,
   'Images/pic%201.png': PNG,
@@ -229,26 +216,20 @@ export const noContentEntries = (): ZipEntries => ({
   'Images/a.png': PNG,
 })
 
-// Asset entries that try to leave the pack directory (zip slip), next to legitimate tricky names.
-// `absoluteTarget` is an absolute path the server must never write (stored URI-encoded, like SIQ 5 media).
 export const maliciousEntries = (absoluteTarget: string): ZipEntries => ({
   'content.xml': packageXml('<question price="100"><params><param name="question" type="content"><item>q</item></param></params></question>', { name: 'Злой пак' }),
-  // written
   'Images/ok%20file.png': PNG,
   'Images/sub/deep.png': PNG,
-  'Images/100%.png': PNG, // lone '%': decodeURIComponent throws, the raw name is kept
-  'Images/%E0%A4%A.png': PNG, // truncated escape
+  'Images/100%.png': PNG,
+  'Images/%E0%A4%A.png': PNG,
   'Audio/..%2Fsibling.mp3': 'leaves Audio/ but stays inside the pack directory',
-  'Audio/': '', // directory entry
-  // never written
+  'Audio/': '',
   'Images/../../raw-escape.txt': 'raw ../',
   'Images/..%2F..%2Fencoded-escape.txt': 'encoded ../',
   'Images/a%2F..%2F..%2F..%2Fnested-escape.txt': 'nested encoded ../',
   [`Video/${encodeURIComponent(absoluteTarget)}`]: 'absolute path',
 })
 
-// adm-zip normalises names like 'a/../b' on addFile: such entries are added under a same-length placeholder and
-// the name bytes are patched in the finished archive (local header + central directory; the CRC covers data only)
 const needsRawName = (name: string): boolean => name.split('/').some(part => part === '..' || part === '.')
   || name.includes('//')
   || name.includes('\\')
@@ -305,7 +286,6 @@ export function writeZip(filePath: string, entries: ZipEntries): string {
   return filePath
 }
 
-// private directory of the current test file (created by test/environment.ts)
 export function testRoot(): string {
   const root = process.env.SIGAME_TEST_ROOT
   if (!root) {
@@ -315,12 +295,10 @@ export function testRoot(): string {
   return root
 }
 
-// a new empty directory inside the test root
 export function makeTempDir(prefix = 'tmp-'): string {
   return fs.mkdtempSync(path.join(testRoot(), prefix))
 }
 
-// all files below dir, relative, sorted ('/' separated)
 export function listFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) {
     return []

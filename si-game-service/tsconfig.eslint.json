@@ -1,6 +1,4 @@
 {
-  // Type information for ESLint only (parserOptions.project in .eslintrc.js): tsconfig.json compiles src/,
-  // the linter also covers the Jest suite in test/. Not used by tsc, ts-jest or the build.
   "extends": "./tsconfig.json",
   "include": [
       "src",

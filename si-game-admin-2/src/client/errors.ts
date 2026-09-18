@@ -1,7 +1,6 @@
 import { AckErrorCode } from '../data'
 import type { AckError } from '../types'
 
-// Errors produced on the client side (no ack from the server).
 export enum ClientErrorCode {
   Timeout = 'TIMEOUT',
   Disconnected = 'DISCONNECTED',
@@ -40,8 +39,6 @@ const describe = (code: RequestErrorCode, serverMessage?: string): string => {
   }
 }
 
-// A failed socket request: an AckError from the server, a timeout or a missing connection.
-// `message` is a Russian text ready to be shown to the user.
 export class RequestError extends Error {
   public readonly code: RequestErrorCode
   public readonly serverMessage?: string

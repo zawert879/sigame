@@ -20,7 +20,6 @@ export class Socket {
     return this.socket.connected
   }
 
-  // Sends a request and waits for its ack. Rejects with RequestError on an AckError response or on timeout.
   public async send<T>(dao: Dao, timeoutMs: number = DEFAULT_REQUEST_TIMEOUT): Promise<T> {
     let response: unknown
     try {

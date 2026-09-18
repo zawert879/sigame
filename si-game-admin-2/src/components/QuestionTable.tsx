@@ -6,7 +6,6 @@ import { RoundType } from "@/data";
 import { notifyError } from "@/utils/notify";
 // eslint-disable-next-line react/display-name
 export const QuestionTable: FC<{ className?: string, data: PayloadStartTable, animateSelectQuestion: string | null }> = memo(({ className, data, animateSelectQuestion }) => {
-  // a round may have no themes / questions at all
   const maxColumns = useMemo(
     () => data.themes.reduce((max, theme) => Math.max(max, theme.questions.length), 0),
     [data.themes]

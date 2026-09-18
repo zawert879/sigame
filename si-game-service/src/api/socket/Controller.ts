@@ -9,7 +9,6 @@ import type { AckError, Dao, EventUpdatePlayers, ResponseGetGames, ResponseNewGa
 import { findPackFile } from '../../utils/packFiles'
 import { type Socket } from './Socket'
 
-// Thrown by a handler to answer with a specific AckError code
 export class AckFailure extends Error {
   constructor(readonly code: AckErrorCode, message?: string) {
     super(message ?? code)
@@ -19,7 +18,6 @@ export class AckFailure extends Error {
 
 type Handler = {
   schema: z.ZodTypeAny;
-  // public requests are allowed without the admin token
   isPublic: boolean;
   run: (payload: unknown) => unknown;
 }
@@ -30,7 +28,6 @@ const describeZodError = (error: z.ZodError): string => error.issues
   .map(issue => (issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message))
   .join('; ')
 
-// push event for the current screen of a game
 const screenDao = (screenData: ScreenData): Dao | null => {
   switch (screenData.screen) {
     case Screen.Screensaver: {
@@ -71,8 +68,6 @@ const screenDao = (screenData: ScreenData): Dao | null => {
   }
 }
 
-// One Controller per socket connection. Every request is acknowledged: the typed response ({} for void)
-// or an AckError. Pushes of the selected game are forwarded to this socket only.
 export class Controller {
   private _selectedGame: Game | null = null
   private readonly _gameListeners: GameListeners
@@ -91,6 +86,9 @@ export class Controller {
       },
       [GameEvent.UpdateScoreValue]: value => {
         this.send({ type: Event.OnUpdateScoreValue, payload: { scoreValue: value } })
+      },
+      [GameEvent.UpdateSettings]: () => {
+        this.pushSettings()
       },
       [GameEvent.UpdatePage]: () => {
         this.pushPage()
@@ -144,12 +142,9 @@ export class Controller {
     this.selectGameInstance(null)
   }
 
-  // ---- request table ----
-
   private handlers(): Array<[Event, Handler]> {
     const isPublic = true
     return [
-      // lobby
       [Event.GetGames, this.request(Schema.requestVoid, (): ResponseGetGames => this.appState.games.map(game => ({
         gameId: game.id,
         gameName: game.name,
@@ -164,7 +159,6 @@ export class Controller {
         return { gameId: game.id, gameName: game.name, packageName: game.packageName }
       })],
 
-      // game flow
       [Event.SelectPack, this.gameRequest(Schema.requestSelectPack, async ({ file }, game) => {
         if (!await findPackFile(file)) {
           throw new AckFailure(AckErrorCode.Failed, `Пак ${file} не найден`)
@@ -191,13 +185,10 @@ export class Controller {
         game.cancelQuestion()
       })],
       [Event.Exit, this.gameRequest(Schema.requestVoid, (_, game) => {
-        // Every socket of the game receives onExit and drops its selection. The game is out of the list at once and
-        // the Default game exists before any client asks for the games again; the media are removed in the background.
         void this.appState.closeGame(game.id)
         this.appState.newGame('Default')
       })],
 
-      // players
       [Event.GetPlayers, this.gameRequest(Schema.requestVoid, (_, game) => game.playersWithQueue, isPublic)],
       [Event.AddPlayer, this.gameRequest(Schema.requestVoid, (_, game) => {
         game.addPlayer()
@@ -230,16 +221,15 @@ export class Controller {
         game.playerUsedButton(code)
       }, isPublic)],
 
-      // score and settings
       [Event.GetSettings, this.gameRequest(Schema.requestVoid, (_, game) => game.getSettings(), isPublic)],
       [Event.SetScoreValue, this.gameRequest(Schema.requestSetScoreValue, ({ value }, game) => {
         game.score.setValue(value)
       })],
       [Event.SetScoreLittle, this.gameRequest(Schema.requestSetScoreLittle, ({ value }, game) => {
-        game.score.setLittle(value)
+        game.setScoreLittle(value)
       })],
       [Event.SetScoreBig, this.gameRequest(Schema.requestSetScoreBig, ({ value }, game) => {
-        game.score.setBig(value)
+        game.setScoreBig(value)
       })],
       [Event.SubmitScoreBigPlus, this.gameRequest(Schema.requestVoid, (_, game) => {
         game.score.bigPlus()
@@ -257,8 +247,7 @@ export class Controller {
         game.mediaPlayer.update(time, isPlaying)
       })],
       [Event.SetVolumeSettings, this.gameRequest(Schema.requestSetVolumeSettings, ({ player, admin }, game) => {
-        game.setting.playerVolume = player
-        game.setting.adminVolume = admin
+        game.setVolumeSettings(player, admin)
       })],
     ]
   }
@@ -267,13 +256,10 @@ export class Controller {
     return { schema, isPublic, run: payload => run(payload as z.output<S>) }
   }
 
-  // request scoped to the selected game (GAME_NOT_SELECTED without selectGame)
   private gameRequest<S extends z.ZodTypeAny>(schema: S, run: (payload: z.output<S>, game: Game) => unknown, isPublic = false): Handler {
     return { schema, isPublic, run: payload => run(payload as z.output<S>, this.requireGame()) }
   }
 
-  // The single wrapper around every request: admin check → payload validation → handler (→ selected game check),
-  // then ack with the result or an AckError. A client may emit without an ack callback.
   private wrap(event: Event, handler: Handler) {
     return async (...args: unknown[]): Promise<void> => {
       const ack = typeof args[args.length - 1] === 'function' ? args.pop() as Ack : null
@@ -344,7 +330,6 @@ export class Controller {
     return this._selectedGame
   }
 
-  // switches the pushes of this socket to another game (null: none); selecting the same game again is a no-op
   private selectGameInstance(game: Game | null) {
     if (this._selectedGame === game) {
       return
@@ -354,8 +339,6 @@ export class Controller {
     this._selectedGame = game
     game?.subscribe(this._gameListeners)
   }
-
-  // ---- pushes ----
 
   private send(dao: Dao) {
     try {
@@ -391,6 +374,15 @@ export class Controller {
     })
   }
 
+  private pushSettings() {
+    const game = this._selectedGame
+    if (!game) {
+      return
+    }
+
+    this.send({ type: Event.OnUpdateSettings, payload: game.getSettings() })
+  }
+
   private pushPage() {
     const game = this._selectedGame
     if (!game) {
@@ -400,7 +392,6 @@ export class Controller {
     this.send({ type: Event.OnUpdateQuestionPage, payload: { payload: game.getQuestionPagePayload() } })
   }
 
-  // onStart<Screen> is sent only while the game is still on that screen
   private pushScreen(screen: Screen) {
     const game = this._selectedGame
     if (!game || game.screen !== screen) {

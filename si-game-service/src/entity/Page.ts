@@ -7,6 +7,7 @@ export class Page {
   private _video: string | null
   private _voice: string | null
   private _html: string | null
+  private _htmlFile: string | null
   private _isMarker: boolean
 
   public get text(): string | null {
@@ -33,6 +34,10 @@ export class Page {
     return this._html
   }
 
+  public get htmlFile(): string | null {
+    return this._htmlFile
+  }
+
   public get isMarker(): boolean {
     return this._isMarker
   }
@@ -45,6 +50,7 @@ export class Page {
       video: this.video,
       voice: this.voice,
       html: this.html,
+      htmlFile: this.htmlFile,
       isMarker: this.isMarker,
     }
   }
@@ -56,6 +62,7 @@ export class Page {
     video: string | null;
     voice: string | null;
     html: string | null;
+    htmlFile: string | null;
     isMarker: boolean;
   }) {
     this._text = options.text
@@ -64,6 +71,7 @@ export class Page {
     this._video = options.video
     this._voice = options.voice
     this._html = options.html
+    this._htmlFile = options.htmlFile
     this._isMarker = options.isMarker
   }
 

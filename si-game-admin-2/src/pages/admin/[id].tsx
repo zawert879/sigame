@@ -2,7 +2,6 @@ import React from "react"
 import { AdminScreen } from "@/components/screens/AdminScreen"
 import { useRouteGameId } from "@/utils/route"
 
-// /admin/<id> in `next dev` (the static export serves admin.html instead).
 const AdminByIdPage = () => {
   const { gameId, resolved } = useRouteGameId('admin')
   return <AdminScreen gameId={gameId} resolved={resolved} />

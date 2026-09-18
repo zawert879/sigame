@@ -1,71 +1,84 @@
 import os from 'os'
 import qrcode from 'qrcode-terminal'
 
-type LanCandidate = {
+export type LanCandidate = {
   address: string;
   name: string;
   score: number;
 }
 
-const isPrivateRouterIp = (address: string): boolean => {
-  if (address.startsWith('10.')) {
-    return true
-  }
-
-  if (address.startsWith('192.168.')) {
-    return true
-  }
-
-  const parts = address.split('.').map(Number)
-  return parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31
+export type StartupLinks = {
+  host: string;
+  isLan: boolean;
+  tvUrl: string;
+  adminUrl: string;
+  others: string[];
 }
 
-const getLanCandidates = (): LanCandidate[] => {
-  const interfaces = os.networkInterfaces()
+type NetworkInterfaces = NodeJS.Dict<os.NetworkInterfaceInfo[]>
+
+const VIRTUAL_INTERFACE = /utun|tun|tap|wg|bridge|vmnet|vmenet|vboxnet|docker|br-|veth|awdl|llw|vethernet|virtualbox|vmware|hyper-v|tailscale|zerotier|hamachi|radmin|virtual|vpn|wireguard|npcap|loopback/i
+const MAC_PRIMARY_INTERFACE = /^en[01]$/
+const LOCALHOST = '127.0.0.1'
+
+const octetsOf = (address: string): number[] | null => {
+  const octets = address.split('.').map(Number)
+  return octets.length === 4 && octets.every(octet => Number.isInteger(octet) && octet >= 0 && octet <= 255) ? octets : null
+}
+
+const isUnusable = ([first, second]: number[]): boolean => (first === 169 && second === 254)
+  || (first === 100 && second >= 64 && second <= 127)
+  || first === 127
+  || first === 0
+  || first >= 224
+
+const addressScore = ([first, second]: number[]): number => {
+  if (first === 192 && second === 168) {
+    return 300
+  }
+
+  if (first === 172 && second >= 16 && second <= 31) {
+    return 200
+  }
+
+  if (first === 10) {
+    return second === 8 || second === 9 ? 40 : 100
+  }
+
+  return 0
+}
+
+const isHostRoute = (item: os.NetworkInterfaceInfo): boolean => item.netmask === '255.255.255.255' || item.cidr?.endsWith('/32') === true
+
+export const getLanCandidates = (
+  interfaces: NetworkInterfaces = os.networkInterfaces(),
+  platform: NodeJS.Platform = process.platform,
+): LanCandidate[] => {
   const candidates: LanCandidate[] = []
-
   for (const [name, items] of Object.entries(interfaces)) {
-    const lowerName = name.toLowerCase()
-    const looksVirtual = [
-      'virtual',
-      'vpn',
-      'tap',
-      'tun',
-      'wintun',
-      'wireguard',
-      'tailscale',
-      'zerotier',
-      'openvpn',
-      'hamachi',
-      'radmin',
-      'vethernet',
-      'hyper-v',
-      'vmware',
-      'virtualbox',
-      'npcap',
-      'loopback',
-    ].some(pattern => lowerName.includes(pattern))
-
+    const isVirtual = VIRTUAL_INTERFACE.test(name)
+    const isMacPrimary = platform === 'darwin' && MAC_PRIMARY_INTERFACE.test(name)
     for (const item of items ?? []) {
-      if (item.family !== 'IPv4' || item.internal || item.address.startsWith('169.254.') || !isPrivateRouterIp(item.address)) {
+      const octets = item.family === 'IPv4' && !item.internal ? octetsOf(item.address) : null
+      if (!octets || isUnusable(octets)) {
         continue
       }
 
-      let score = 0
-      if (item.address.startsWith('192.168.')) {
-        score += 300
-      } else if (item.address.startsWith('172.')) {
-        score += 200
-      } else if (item.address.startsWith('10.')) {
-        score += 100
-      }
-
-      if (item.address.startsWith('10.8.') || item.address.startsWith('10.9.')) {
-        score -= 60
-      }
-
-      if (looksVirtual) {
+      let score = addressScore(octets)
+      if (isVirtual) {
         score -= 500
+      }
+
+      if (isHostRoute(item)) {
+        score -= 400
+      }
+
+      if (octets[3] === 1) {
+        score -= 150
+      }
+
+      if (isMacPrimary) {
+        score += 50
       }
 
       candidates.push({ address: item.address, name, score })
@@ -75,42 +88,22 @@ const getLanCandidates = (): LanCandidate[] => {
   return candidates.sort((a, b) => b.score - a.score)
 }
 
-// The QR opens '/', which redirects to the first game, so it stays valid after «Выход» recreates the game.
-// With an admin token the link carries it: the device that opens it gets admin rights.
-// siqDir: where the uploaded packs are stored (it is not the working directory of the desktop build).
-export const printStartupBanner = (port: number, adminToken: string | null, siqDir: string) => {
-  const lanIp = getLanCandidates()[0]?.address ?? null
-  const host = lanIp ?? '127.0.0.1'
+const serverUrl = (host: string, port: number, pathname = '/'): string => `http://${host}:${port}${pathname}`
+
+export const tvUrl = (port: number, candidates: LanCandidate[] = getLanCandidates()): string =>
+  serverUrl(candidates[0]?.address ?? LOCALHOST, port)
+
+export const startupLinks = (port: number, adminToken: string | null, candidates: LanCandidate[]): StartupLinks => {
+  const [best, ...rest] = candidates
+  const host = best?.address ?? LOCALHOST
   const tokenQuery = adminToken ? `?token=${encodeURIComponent(adminToken)}` : ''
-  const qrUrl = `http://${host}:${port}/${tokenQuery}`
-
-  console.log('')
-  console.log('SI Game запущена')
-  console.log(`Порт: ${port}`)
-  console.log(adminToken ? 'Управление игрой: только с admin-токеном (ADMIN_TOKEN)' : 'Управление игрой: открыто для всех в сети')
-  console.log(`Паки: ${siqDir}`)
-  console.log('')
-
-  if (lanIp) {
-    console.log(`Ссылка для локальной сети: ${qrUrl}`)
-    console.log('QR для подключения устройства. Телефон/планшет должен быть в той же Wi-Fi/LAN сети:')
-  } else {
-    console.log(`Адрес локальной сети не найден. Ссылка работает только на этом компьютере: ${qrUrl}`)
+  return {
+    host,
+    isLan: best !== undefined,
+    tvUrl: serverUrl(host, port),
+    adminUrl: `${serverUrl(host, port, '/admin/')}${tokenQuery}`,
+    others: rest.map(candidate => `${serverUrl(candidate.address, port)} (${candidate.name})`),
   }
-
-  qrcode.generate(qrUrl, { small: true })
-
-  if (adminToken) {
-    console.log('Ссылка и QR содержат admin-токен — не показывай их игрокам.')
-  }
-
-  console.log('')
-  console.log('Краткая инструкция:')
-  console.log('  1. Не закрывай это окно во время игры.')
-  console.log('  2. Отсканируй QR на устройстве для показа игры.')
-  console.log('  3. Для управления открой админку из интерфейса игры.')
-  console.log(`  4. Если другое устройство не подключается, ${firewallHint()}`)
-  console.log('')
 }
 
 const firewallHint = (): string => {
@@ -123,4 +116,43 @@ const firewallHint = (): string => {
   }
 
   return 'проверь, что файрвол пропускает входящие подключения на этот порт.'
+}
+
+export const printStartupBanner = (port: number, adminToken: string | null, siqDir: string, candidates: LanCandidate[] = getLanCandidates()) => {
+  const links = startupLinks(port, adminToken, candidates)
+
+  console.log('')
+  console.log('SI Game запущена')
+  console.log(`Порт: ${port}`)
+  console.log(adminToken ? 'Управление игрой: только с admin-токеном (ADMIN_TOKEN)' : 'Управление игрой: открыто для всех в сети')
+  console.log(`Паки: ${siqDir}`)
+  console.log('')
+
+  if (!links.isLan) {
+    console.log('Адрес локальной сети не найден: ссылки работают только на этом компьютере.')
+  }
+
+  console.log(`Экран игры (телевизор, проектор): ${links.tvUrl}`)
+  if (links.isLan) {
+    console.log('QR для экрана игры. Устройство должно быть в той же Wi-Fi/LAN сети:')
+  }
+
+  qrcode.generate(links.tvUrl, { small: true })
+
+  console.log(`Пульт ведущего: ${links.adminUrl}`)
+  if (adminToken) {
+    console.log('Ссылка пульта содержит admin-токен — не показывай её игрокам.')
+  }
+
+  if (links.others.length > 0) {
+    console.log(`Другие адреса: ${links.others.join(', ')}`)
+  }
+
+  console.log('')
+  console.log('Краткая инструкция:')
+  console.log('  1. Не закрывай это окно во время игры.')
+  console.log('  2. Открой ссылку экрана игры или отсканируй QR на устройстве для показа.')
+  console.log('  3. Ведущий открывает ссылку пульта на своём компьютере или телефоне.')
+  console.log(`  4. Если другое устройство не подключается, ${firewallHint()}`)
+  console.log('')
 }

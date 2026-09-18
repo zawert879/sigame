@@ -6,6 +6,17 @@ import { makeTempDir, noContentEntries, packageXml, PNG, siq4Entries, siq5Entrie
 const siq5 = zipBuffer(siq5Entries())
 const siq4 = zipBuffer(siq4Entries())
 
+const storedTogether = (files: string[]) => ({
+  status: 200,
+  body: { file: expect.stringMatching(/./) as string, files: expect.arrayContaining(files) as string[] },
+})
+
+const expectFirstFile = (response: { body: unknown }, count: number) => {
+  const { file, files } = response.body as { file: string; files: string[] }
+  expect(files).toHaveLength(count)
+  expect(files[0]).toBe(file)
+}
+
 describe('REST API', () => {
   let server: TestServer
   let staticDir: string
@@ -27,11 +38,19 @@ describe('REST API', () => {
   })
 
   afterEach(() => {
-    // formidable temp files never stay behind
     expect(fs.readdirSync(server.uploadTmpDir)).toEqual([])
   })
 
   const siqFiles = () => fs.readdirSync(server.siqDir).sort()
+
+  test('GET /api/health identifies the app and its version, without caching', async () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }
+    const response = await fetch(`${server.base}/api/health`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.json()).toEqual({ app: 'sigame', version: packageJson.version })
+    expect((await fetch(`${server.base}/api/health`, { method: 'POST' })).status).toBe(405)
+  })
 
   test('GET /api/fatal is a 404 and the server keeps running', async () => {
     expect((await fetch(`${server.base}/api/fatal`)).status).toBe(404)
@@ -100,7 +119,8 @@ describe('REST API', () => {
 
     test('several files in one request are stored together, or none of them', async () => {
       const both = await upload(server.base, [{ name: 'multi4.siq', content: siq4 }, { name: 'multi5.siq', content: siq5 }])
-      expect(both).toEqual({ status: 200, body: { file: 'multi4.siq', files: ['multi4.siq', 'multi5.siq'] } })
+      expect(both).toEqual(storedTogether(['multi4.siq', 'multi5.siq']))
+      expectFirstFile(both, 2)
 
       const before = siqFiles()
       const oneBroken = await upload(server.base, [{ name: 'good.siq', content: siq4 }, { name: 'bad.siq', content: 'not a zip' }])
@@ -125,7 +145,7 @@ describe('REST API', () => {
         'Content-Type: application/octet-stream',
         '',
         siq4.subarray(0, 100).toString('latin1'),
-      ].join('\r\n') // no closing boundary
+      ].join('\r\n')
       const response = await fetch(`${server.base}/api/upload`, {
         method: 'POST',
         body: Buffer.from(body, 'latin1'),
@@ -133,13 +153,10 @@ describe('REST API', () => {
       })
       expect(response.status).toBe(400)
       expect(await response.json()).toEqual({ error: 'INVALID_FILE' })
-      // formidable removes the partial file asynchronously
       await waitUntil(() => fs.readdirSync(server.uploadTmpDir).length === 0, 'the partial upload is removed')
       expect(siqFiles()).not.toContain('cut.siq')
     })
 
-    // Files of any other multipart field are never written to the temp dir (each could take up to 1 GB); the
-    // afterEach check makes sure no temp file stays behind.
     test('a file under another field name is rejected and leaves no temp file', async () => {
       const response = await upload(server.base, [{ name: 'other.siq', content: siq4, field: 'attachment' }])
       expect(response).toEqual({ status: 400, body: { error: 'INVALID_FILE' } })
@@ -170,15 +187,15 @@ describe('REST API', () => {
       expect(packs).toContainEqual({ name: 'Большими буквами', file: 'UPPER.SIQ', isBroken: false })
       expect(packs.some(pack => pack.file === 'readme.txt')).toBe(false)
 
-      // a second request gives the same list
       expect(await listPacks(server.base)).toEqual(packs)
     })
 
     test('a valid pack without a name is playable and listed under its file name', async () => {
       const unnamed = zipBuffer({ 'content.xml': packageXml('<question price="100"><params><param name="question" type="content"><item>q</item></param></params></question>').replace(' name="Пак"', '') })
       const blank = zipBuffer({ 'content.xml': packageXml('<question price="100"><params><param name="question" type="content"><item>q</item></param></params></question>', { name: ' ' }) })
-      expect(await upload(server.base, [{ name: 'Без имени.SIQ', content: unnamed }, { name: 'blank.siq', content: blank }]))
-        .toEqual({ status: 200, body: { file: 'Без имени.SIQ', files: ['Без имени.SIQ', 'blank.siq'] } })
+      const response = await upload(server.base, [{ name: 'Без имени.SIQ', content: unnamed }, { name: 'blank.siq', content: blank }])
+      expect(response).toEqual(storedTogether(['Без имени.SIQ', 'blank.siq']))
+      expectFirstFile(response, 2)
 
       const packs = await listPacks(server.base)
       expect(packs).toContainEqual({ name: 'Без имени', file: 'Без имени.SIQ', isBroken: false })
@@ -261,8 +278,36 @@ describe('REST API', () => {
       expect((await fetch(`${server.base}/api/files/${game.id}/Images/pic%201.png`)).status).toBe(404)
     })
 
+    test('/api/files/<gameId>/Html/<name> serves the HTML files of the pack, sandboxed from the app origin', async () => {
+      const htmlPack = zipBuffer({
+        'content.xml': packageXml(`<question price="100"><params><param name="question" type="content">
+          <item type="html" isRef="True">page 1.html</item>
+        </param></params><right><answer>a</answer></right></question>`),
+        'Html/page%201.html': '<!doctype html><p>Страница</p>',
+        'Html/assets/style.css': 'p { color: red }',
+      })
+      fs.writeFileSync(path.join(server.siqDir, 'html.siq'), htmlPack)
+      const game = server.app.appState.newGame('HTML')
+      await game.startGame('html.siq')
+      game.next()
+      game.next()
+      game.next()
+      game.next()
+      game.selectQuestion(game.package!.currentRound.questions[0].id)
+      expect(game.package!.currentQuestion!.currentPage).toMatchObject({ html: null, htmlFile: 'page 1.html' })
+
+      const page = await fetch(`${server.base}/api/files/${game.id}/Html/${encodeURIComponent('page 1.html')}`)
+      expect(page.status).toBe(200)
+      expect(page.headers.get('content-type')).toMatch(/text\/html/)
+      expect(page.headers.get('content-security-policy')).toMatch(/^sandbox\b/)
+      expect(page.headers.get('content-security-policy')).not.toMatch(/allow-same-origin/)
+      expect(await page.text()).toBe('<!doctype html><p>Страница</p>')
+      expect(await (await fetch(`${server.base}/api/files/${game.id}/Html/assets/style.css`)).text()).toBe('p { color: red }')
+      expect((await fetch(`${server.base}/api/files/${game.id}/Html/missing.html`)).status).toBe(404)
+      await server.app.appState.closeGame(game.id)
+    })
+
     describe('byte ranges (seeking in audio / video)', () => {
-      // Audio/song.mp3 of the SIQ 5 fixture
       const song = Buffer.from('ID3 song')
       const size = song.length
       let url: string
@@ -355,8 +400,10 @@ describe('REST API', () => {
       ['/player/5f0e2d1c-game-id', 'player'],
       ['/player/5f0e2d1c-game-id?token=x', 'player'],
       ['/unknown/deep/path', 'index'],
-      // the route name must be a plain word to pick <name>.html
       ['/a.b/x', 'index'],
+      ['/admin/', 'admin'],
+      ['/admin', 'admin'],
+      ['/player/', 'player'],
     ])('GET %s → %s.html', async (url, page) => {
       const response = await get(url)
       expect(response.status).toBe(200)
@@ -381,10 +428,24 @@ describe('REST API', () => {
       }
     })
 
+    test.each([
+      '/_next/missing.js',
+      '/_next/static/chunks/pages/admin-0123abcd.js',
+      '/_next/data/x',
+      '/favicon.ico',
+      '/missing.css',
+      '/admin/missing.js',
+      '/player/some-id/image.PNG',
+      '/deep/path/file.woff2',
+    ])('a missing asset %s is a 404, not a page', async url => {
+      const response = await get(url)
+      expect(response.status).toBe(404)
+      expect(response.body).not.toContain('<title>')
+    })
+
     test('/api, /socket.io and non-GET requests do not fall back to html', async () => {
       expect((await get('/api/unknown')).status).toBe(404)
       expect((await get('/api')).status).toBe(404)
-      expect((await get('/_next/missing.js')).body).toBe('<title>index</title>')
       const post = await get('/admin/some-id', { method: 'POST' })
       expect(post.status).toBe(404)
       expect(post.body).not.toContain('<title>')

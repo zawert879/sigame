@@ -13,7 +13,6 @@ type ScenarioAtom = SIQ.Content.Package.Round.Theme.Question.ScenarioAtom
 type SelectPrice = NonNullable<PayloadStartQuestion['selectPrice']>
 type AnswerGroupItem = PayloadStartQuestion['answerGroup'][number]
 
-// SIQ 5: <question type="...">
 const siq5Types: Record<string, QuestionType> = {
   stake: QuestionType.STAKE,
   secret: QuestionType.SECRET,
@@ -22,7 +21,6 @@ const siq5Types: Record<string, QuestionType> = {
   noRisk: QuestionType.NO_RISC,
 }
 
-// SIQ 4: <type name="...">
 const siq4Types: Record<string, QuestionType> = {
   cat: QuestionType.SECRET,
   bagcat: QuestionType.SECRET,
@@ -30,14 +28,29 @@ const siq4Types: Record<string, QuestionType> = {
   sponsored: QuestionType.NO_RISC,
 }
 
-// SIQ 5 params that are known but do not affect pages
 const passiveParams = new Set(['answerType', 'answerOptions', 'answerDeviation'])
 
 const isObject = <T>(value: T): value is Exclude<T, string | number | boolean | null | undefined> =>
   typeof value === 'object' && value !== null
 
-// SIQ 4 media reference: '@name' is a file of the pack, anything else is used as is (URL)
 const mediaRef = (value: string): string => value.startsWith('@') ? value.slice(1) : value
+
+const isAbsoluteUrl = (value: string): boolean => /^([a-z][a-z\d+.-]*:|\/\/)/i.test(value.trim())
+
+const isTrue = (value: string | undefined): boolean => value?.trim().toLowerCase() === 'true'
+
+const setHtml = (pageBuilder: PageBuilder, value: string, isPackFile: boolean) => {
+  if (isPackFile) {
+    pageBuilder.setHtmlFile(value)
+  } else {
+    pageBuilder.setHtml(value)
+  }
+}
+
+const setAtomHtml = (pageBuilder: PageBuilder, text: string) => {
+  const isPackFile = text.length > 1 && text.startsWith('@')
+  setHtml(pageBuilder, isPackFile ? text.slice(1) : text, isPackFile)
+}
 
 export class Question {
   readonly id: string
@@ -67,19 +80,16 @@ export class Question {
     this.wrongAnswer = wrongAnswer.length > 0 ? wrongAnswer : null
 
     this.price = numberOf(questionData.attributes?.price) ?? 0
-    // A question with a negative price is not played: it is marked as played right away, without events
     this._isAvailable = this.price >= 0
 
     const params = toArray(questionData.params?.param).filter(param => isObject(param))
     if (params.length > 0) {
-      // SIQ 5
       this.type = siq5Types[questionData.attributes?.type ?? ''] ?? QuestionType.DEFAULT
       this.parseAnswerGroup(params)
       this.parseParams(params)
       return
     }
 
-    // SIQ 4 (or a question without content)
     if (isObject(questionData.type)) {
       this.type = siq4Types[questionData.type.attributes?.name ?? ''] ?? QuestionType.DEFAULT
       this.parseTypeParams(questionData.type)
@@ -125,7 +135,6 @@ export class Question {
     return this._themeName
   }
 
-  // true while the question has not been played yet
   public get isAvailable(): boolean {
     return this._isAvailable
   }
@@ -138,7 +147,6 @@ export class Question {
     return this._answerGroup
   }
 
-  // back to the first page (opening, repeating or cancelling the question)
   public restart(): void {
     this._pageIndex = 0
   }
@@ -148,7 +156,6 @@ export class Question {
     this._isAvailable = false
   }
 
-  // false when the current page is the last one
   public goToNextPage(): boolean {
     if (this._pageIndex + 1 < this.pagesCount) {
       this._pageIndex += 1
@@ -158,8 +165,6 @@ export class Question {
     return false
   }
 
-  // Jump to the first page of the answer (the marker page; the answer may take several pages, the host goes through
-  // them with next). Nothing changes while the answer is already shown. false when the page did not change.
   public goToAnswer(): boolean {
     const markerIndex = this._pages?.findIndex(page => page.isMarker) ?? -1
     const answerIndex = markerIndex >= 0 ? markerIndex : this.pagesCount - 1
@@ -201,7 +206,6 @@ export class Question {
       return null
     }
 
-    // an image option is sent as { '#text': <file> }, a text option as a plain string
     return isObject(item) && item.attributes?.type === 'image' ? { '#text': text } : text
   }
 
@@ -211,7 +215,6 @@ export class Question {
     for (const param of params) {
       const name = param.attributes?.name ?? ''
       if (param.attributes?.type === 'group') {
-        // answer options, see parseAnswerGroup
         continue
       }
 
@@ -283,7 +286,6 @@ export class Question {
     return { minimum, maximum, step, type }
   }
 
-  // SIQ 4 <type name="..."><param name="theme|cost|self|knows">
   private parseTypeParams(type: NonNullable<QuestionData['type']>) {
     for (const param of toArray(type.param)) {
       if (!isObject(param)) {
@@ -305,7 +307,6 @@ export class Question {
           if (cost !== null && cost > 0) {
             this._selectPrice = { minimum: cost, maximum: cost, step: 0, type: CostType.ACCURATE }
           } else if (cost === 0) {
-            // bagcat: 0 means "minimum or maximum of the round"
             this._selectPrice = { minimum: 0, maximum: 0, step: 0, type: CostType.MIN_OR_MAX_IN_ROUND }
           }
 
@@ -328,7 +329,6 @@ export class Question {
     }
   }
 
-  // SIQ 4 <scenario><atom type="...">: each atom is a page, 'marker' separates the question from the answer
   private parseScenario(atoms: ScenarioAtom[]) {
     const pageBuilder = new PageBuilder()
     let hasMarker = false
@@ -350,7 +350,6 @@ export class Question {
       }
 
       if (type === 'say') {
-        // a replic is attached to the next page of the question / answer, or gets a page of its own
         pageBuilder.setReplic(text)
         continue
       }
@@ -373,7 +372,7 @@ export class Question {
         }
 
         case 'html': {
-          pageBuilder.setHtml(mediaRef(text))
+          setAtomHtml(pageBuilder, text)
           break
         }
 
@@ -407,8 +406,6 @@ export class Question {
     this._pages = pageBuilder.finish()
   }
 
-  // Marker page + answer: the answer content when given, otherwise the first right answer.
-  // The marker flag is set on the first page of the answer.
   private finishPages(pageBuilder: PageBuilder, fillAnswer: (() => number) | null) {
     pageBuilder.endSection().setMarker(true)
     const answerItems = fillAnswer ? fillAnswer() : 0
@@ -419,7 +416,6 @@ export class Question {
     this._pages = pageBuilder.finish()
   }
 
-  // SIQ 5 content items; returns the number of items that produce visible content
   private fillPages(data: Param['item'], pageBuilder: PageBuilder): number {
     let count = 0
     for (const item of toArray<ContentItem>(data)) {
@@ -430,7 +426,6 @@ export class Question {
 
       const attributes = isObject(item) ? item.attributes ?? {} : {}
       if (attributes.placement === 'replic') {
-        // a replic is attached to the next page of the question / answer, or gets a page of its own
         pageBuilder.setReplic(text)
         continue
       }
@@ -453,7 +448,7 @@ export class Question {
         }
 
         case 'html': {
-          pageBuilder.setHtml(text)
+          setHtml(pageBuilder, text, isTrue(attributes.isRef) && !isAbsoluteUrl(text))
           break
         }
 
@@ -463,7 +458,6 @@ export class Question {
       }
 
       count += 1
-      // waitForFinish set → the item is shown together with the next one
       if (attributes.waitForFinish === undefined) {
         pageBuilder.saveAndNextPage()
       }

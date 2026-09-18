@@ -7,7 +7,6 @@ import { removeStaleMedia } from '../src/utils/packages'
 import { listFiles, makeTempDir, PNG, siq4Entries, writeZip } from './helpers/fixtures'
 import { loadApp, type LoadedApp, startServer } from './helpers/server'
 
-// the pid of a process that has exited
 const deadPid = (): number => {
   const { pid, status } = spawnSync(process.execPath, ['-e', ''])
   if (pid === undefined || status !== 0) {
@@ -19,17 +18,14 @@ const deadPid = (): number => {
 
 const runDir = (pid: number): string => `run-${pid}-${randomUUID()}`
 
-// PACKAGES_DIR with media of other runs next to things this app never created
 function fillPackagesDir(packagesDir: string) {
   const outside = makeTempDir('user-')
   fs.writeFileSync(path.join(outside, 'keep.txt'), 'user data')
   const entries = {
-    // removed: left by processes that are gone
-    legacyGame: randomUUID(), // a game directory of an older version
+    legacyGame: randomUUID(),
     deadRun: runDir(deadPid()),
-    samePidRun: runDir(process.pid), // an earlier process that had the pid of this one
-    // kept
-    liveRun: runDir(process.ppid), // a copy of the server that is still running
+    samePidRun: runDir(process.pid),
+    liveRun: runDir(process.ppid),
     userDir: 'my-project',
     oldNamedDir: 'stale-game',
     uuidFile: randomUUID(),
@@ -63,7 +59,6 @@ describe('startup: media of earlier runs', () => {
     })
     const { kept, all, outside } = prepared!
     try {
-      // not listening yet: nothing is removed
       expect(fs.readdirSync(loaded.packagesDir).sort()).toEqual(all)
 
       await new Promise<void>(resolve => {
@@ -93,11 +88,9 @@ describe('startup: media of earlier runs', () => {
       await game.startGame('test4.siq')
       const image = `${first.base}/api/files/${game.id}/Images/cat.png`
       expect((await fetch(image)).status).toBe(200)
-      // left by a finished run: the second copy would remove it if it started
       const deadRun = path.join(first.packagesDir, runDir(deadPid()))
       fs.mkdirSync(deadRun)
 
-      // the same directories, e.g. the host starts sigame.exe once more during the game
       second = loadApp({ dirs: { siqDir: first.siqDir, packagesDir: first.packagesDir, uploadTmpDir: first.uploadTmpDir } })
       const { app } = second
       expect(fs.existsSync(deadRun)).toBe(true)
@@ -132,7 +125,6 @@ describe('startup: media of earlier runs', () => {
     removeStaleMedia(packagesDir, own)
     expect(fs.readdirSync(packagesDir).sort()).toEqual([own, live].map(dir => path.basename(dir)).sort())
 
-    // a missing directory is only reported
     removeStaleMedia(path.join(packagesDir, 'missing'), own)
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(path.join(packagesDir, 'missing')), expect.anything())
   })
@@ -142,7 +134,6 @@ describe('startup: HTTP server', () => {
   test('a pack upload may take long: the whole request gets hours, an idle connection still closes', () => {
     const { app } = loadApp()
     try {
-      // Node's default requestTimeout (5 minutes) cut off a big pack sent over Wi-Fi with 408
       expect(app.httpServer.requestTimeout).toBeGreaterThanOrEqual(60 * 60 * 1000)
       expect(app.httpServer.timeout).toBe(5 * 60 * 1000)
       expect(app.httpServer.headersTimeout).toBeLessThanOrEqual(60 * 1000)

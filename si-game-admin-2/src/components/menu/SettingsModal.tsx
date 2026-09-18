@@ -25,7 +25,6 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh 
     refresh()
   }, [refresh])
 
-  // runs a menu action; the menu closes on success, a failure is shown and the menu stays open
   const runAction = useCallback(async (key: string, errorTitle: string, action: () => Promise<void>) => {
     setPending(key)
     try {
@@ -51,9 +50,6 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh 
   const handleRepeatQuestion = useCallback(
     () => runAction('repeatQuestion', 'Не удалось повторить вопрос', async () => {
       await client.repeatQuestion()
-      // The admin media player follows no pushes: restart it locally. It remounts paused at the start, as when the
-      // question was opened, while the server restarts the media playing — the admin player is the source of the
-      // media controls, so send its state and the player screen stops at the start too.
       useGameStore.getState().restartQuestionMedia()
       client.updateMediaPlayer({ time: 0, isPlaying: false })
         .catch(error => notifyError(error, 'Не удалось синхронизировать плеер'))

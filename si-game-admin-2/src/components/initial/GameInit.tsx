@@ -8,10 +8,8 @@ import { client } from "@/client";
 import { useGameStore, type GameMeta } from "@/store/game";
 import { notifyError } from "@/utils/notify";
 
-// Initial screen of the admin: players and pack selection.
 // eslint-disable-next-line react/display-name
 export const GameInit: React.FC<{ game: GameMeta }> = memo(({ game }) => {
-  // kept up to date by onUpdatePlayers in the game store
   const players = useGameStore(state => state.players)
 
   const onDeletePlayer = useCallback(async (playerId: string) => {

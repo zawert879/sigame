@@ -1,18 +1,18 @@
 import { FC, ReactNode } from "react";
 import { PageSnapshotType } from "@/types";
 import MediaPlayer, { MediaPlayerType } from "../MediaPlayer";
-import { HtmlContent } from "./HtmlContent";
+import { HtmlContent, hasHtmlContent } from "./HtmlContent";
 import { useGameStore } from "@/store/game";
 import { mediaUrl } from "@/utils/api";
 import { formatPageText } from "@/utils/utils";
 
-// A question page on the player screen (TV).
 export const Page: FC<{
   page: PageSnapshotType
 }> = ({ page }) => {
   const gameId = useGameStore(state => state.gameId)
   const elements: ReactNode[] = []
   const text = formatPageText(page.text)
+  const replic = formatPageText(page.replic).trim()
 
   if (text) {
     elements.push(
@@ -55,12 +55,32 @@ export const Page: FC<{
       </div>
     );
   }
-  if (page.html) {
+  if (hasHtmlContent(page)) {
     elements.push(
       <div key="html" className="w-full h-full">
-        <HtmlContent html={page.html} />
+        <HtmlContent page={page} gameId={gameId} />
       </div>
     );
   }
-  return <>{elements}</>
+
+  if (elements.length === 0) {
+    return (
+      <div className="flex-1 min-w-0 h-full flex justify-center items-center">
+        {replic && <span className="whitespace-pre-line">{replic}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 min-w-0 h-full flex flex-col">
+      <div className="grow min-h-0 w-full flex justify-center items-center">
+        {elements}
+      </div>
+      {replic && (
+        <div className="shrink-0 max-h-[35%] overflow-hidden mt-4 mx-auto max-w-full px-6 py-3 rounded-xl bg-black/40 text-yellow-100 text-[0.4em] leading-snug whitespace-pre-line">
+          {replic}
+        </div>
+      )}
+    </div>
+  )
 };

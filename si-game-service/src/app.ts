@@ -15,13 +15,9 @@ import { Socket } from './api/socket/Socket'
 import { router } from './api/rest/router'
 import { AppState } from './entity/AppState'
 import { mediaDir, removeStaleMedia } from './utils/packages'
+import { isPageRequest } from './utils/pageRoutes'
 
-// Builds the app without listening: src/index.ts calls httpServer.listen(PORT), a test can listen(0).
-
-// Whole request, i.e. a pack upload (up to 1 GB): 2 hours ≈ 1.2 Mbit/s. Node's default (5 minutes since Node 18)
-// cut off a big pack sent over Wi-Fi with 408. A stalled connection is still closed by the idle timeout below.
 const REQUEST_TIMEOUT = 2 * 60 * 60 * 1000
-// socket idle time
 const IDLE_TIMEOUT = 5 * 60 * 1000
 
 for (const runtimeDir of [SIQ_DIR, PACKAGES_DIR]) {
@@ -42,18 +38,16 @@ app.use(cors())
 app.use(router.routes())
 app.use(router.allowedMethods())
 
-// media of the games of this process only (see utils/packages.ts)
 app.use(mount('/api/files', serveFiles(mediaDir)))
 app.use(mount('/files', serveFiles(mediaDir)))
 
 if (fs.existsSync(FRONTEND_STATIC_DIR)) {
   app.use(serve(FRONTEND_STATIC_DIR))
 
-  // SPA fallback: /admin/<id> → admin.html, /player/<id> → player.html, anything else → index.html
   app.use(async (ctx, next) => {
     await next()
 
-    if (ctx.status !== 404 || ctx.method !== 'GET' || ctx.path.startsWith('/api') || ctx.path.startsWith('/socket.io')) {
+    if (ctx.status !== 404 || ctx.method !== 'GET' || !isPageRequest(ctx.path)) {
       return
     }
 
@@ -77,8 +71,6 @@ io.on(SystemEvent.Connection, socketIo => {
   new Controller(socket, appState, isAdminToken(socket.authToken))
 })
 
-// Media left by earlier runs are removed only once this server listens: a copy that exits because the port is taken
-// must not touch anything
 httpServer.once('listening', () => {
   removeStaleMedia()
 })

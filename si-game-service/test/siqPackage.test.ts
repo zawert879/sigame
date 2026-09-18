@@ -105,6 +105,30 @@ describe('SiqPackage.saveAssets', () => {
     expect(fs.readFileSync(path.join(packDir, 'Audio', 'song.mp3'), 'utf8')).toBe('ID3 song')
   })
 
+  test('writes Html/ with URI-decoded names next to the media; zip-slip entries of Html/ are skipped', async () => {
+    const dir = makeTempDir('html-')
+    const packDir = path.join(dir, 'games', 'g1')
+    const siq = parseSIQ(packFile(dir, {
+      'content.xml': packageXml('<question price="1"/>'),
+      'Html/page%201.html': '<p>1</p>',
+      'Html/%D1%81%D1%82%D1%80.html': '<p>2</p>',
+      'Html/assets/app.js': 'void 0',
+      'Html/..%2F..%2F..%2Fhtml-escape.html': 'escape',
+      'Html/../../raw-html-escape.html': 'escape',
+      'Images/a.png': PNG,
+    }))
+    jest.mocked(console.warn).mockClear()
+
+    await SiqPackage.saveAssets(siq, packDir)
+
+    expect(listFiles(packDir)).toEqual(['Html/assets/app.js', 'Html/page 1.html', 'Html/стр.html', 'Images/a.png'])
+    expect(fs.readFileSync(path.join(packDir, 'Html', 'page 1.html'), 'utf8')).toBe('<p>1</p>')
+    expect(listFiles(dir).filter(file => !file.startsWith('games/g1/'))).toEqual([expect.stringMatching(/^pack-\d+\.siq$/)])
+    const skipped = jest.mocked(console.warn).mock.calls.map(call => String(call[0]))
+    expect(skipped).toHaveLength(2)
+    expect(skipped.every(message => message.includes('escape.html'))).toBe(true)
+  })
+
   test('zip-slip entries are skipped, bad escapes are kept raw, nothing is written outside the pack directory', async () => {
     const dir = makeTempDir('slip-')
     const absoluteTarget = path.join(dir, 'absolute-escape.txt')
@@ -119,10 +143,8 @@ describe('SiqPackage.saveAssets', () => {
       'Images/100%.png',
       'Images/ok file.png',
       'Images/sub/deep.png',
-      // '..%2Fsibling.mp3' leaves Audio/ but stays inside the pack directory
       'sibling.mp3',
     ])
-    // the only other file below the test dir is the pack itself
     expect(listFiles(dir).filter(file => !file.startsWith('games/g1/'))).toEqual([expect.stringMatching(/^packs\/pack-\d+\.siq$/)])
     expect(fs.existsSync(absoluteTarget)).toBe(false)
 
@@ -136,7 +158,6 @@ describe('SiqPackage.saveAssets', () => {
   test('a file that cannot be written is logged, the other files are still written', async () => {
     const dir = makeTempDir('fail-')
     const packDir = path.join(dir, 'g1')
-    // a directory where a file has to go
     fs.mkdirSync(path.join(packDir, 'Images', 'blocked.png'), { recursive: true })
     const siq = parseSIQ(packFile(dir, {
       'content.xml': packageXml('<question price="1"/>'),

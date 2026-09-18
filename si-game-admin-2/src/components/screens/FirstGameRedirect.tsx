@@ -7,9 +7,6 @@ import type { RouteName } from '@/utils/route'
 
 type State = { status: 'loading' } | { status: 'empty' } | { status: 'error', message: string }
 
-// Opens a screen of the first game on the server (the server always has one): "/" → its player screen, "/admin" → its
-// host panel. Links without a game id stay valid after «Выход» recreates the game, so the startup links point here.
-// The redirect drops the query string: a "?token=" has already been remembered by src/config.ts.
 export const FirstGameRedirect: FC<{ route: RouteName }> = ({ route }) => {
   const [state, setState] = useState<State>({ status: 'loading' })
 

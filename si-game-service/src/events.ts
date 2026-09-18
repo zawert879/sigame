@@ -11,6 +11,7 @@ export enum GameEvent {
   UpdatePlayers = 'UpdatePlayers',
   QueuePlayersUpdated = 'QueuePlayersUpdated',
   UpdateScoreValue = 'UpdateScoreValue',
+  UpdateSettings = 'UpdateSettings',
   Exit = 'Exit',
   UpdateMediaPlayer = 'OnUpdateMediaPlayer',
 }

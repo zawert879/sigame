@@ -5,7 +5,6 @@ export function timeout(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Question page text. The pack parser may deliver numbers, and the Futura font has no "ё" glyph.
 export const formatPageText = (text: unknown): string => {
   if (text === null || text === undefined) {
     return ''

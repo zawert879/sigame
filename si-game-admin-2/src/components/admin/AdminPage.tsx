@@ -1,12 +1,11 @@
 import { FC, ReactNode } from "react";
 import { PageSnapshotType } from "@/types";
 import MediaPlayer, { MediaPlayerType } from "../MediaPlayer";
-import { HtmlContent } from "../question/HtmlContent";
+import { HtmlContent, hasHtmlContent } from "../question/HtmlContent";
 import { useGameStore } from "@/store/game";
 import { mediaUrl } from "@/utils/api";
 import { formatPageText } from "@/utils/utils";
 
-// A question page on the admin screen: the current page with media controls or the preview of the next one.
 export const AdminPage: FC<{
   page: PageSnapshotType;
   isPreview?: boolean;
@@ -58,10 +57,10 @@ export const AdminPage: FC<{
       />
     );
   }
-  if (page.html) {
+  if (hasHtmlContent(page)) {
     elements.push(
       <div key="html" className="w-full grow min-h-0">
-        <HtmlContent html={page.html} />
+        <HtmlContent page={page} gameId={gameId} />
       </div>
     );
   }

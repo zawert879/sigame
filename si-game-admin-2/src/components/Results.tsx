@@ -6,7 +6,6 @@ import { convertToRoman } from "@/utils/utils";
 
 type PlayerWithPlace = Player & { place: number }
 
-// players beyond the podium are laid out in rows of at most this many cards
 const MAX_ROW_SIZE = 6
 
 // eslint-disable-next-line react/display-name
@@ -69,8 +68,6 @@ export const Results: FC<{ players: Player[], isLastRound: boolean, compact?: bo
   )
 });
 
-// Splits the players below the podium into rows: up to 4 in one row, otherwise at least two rows of at most
-// MAX_ROW_SIZE, the lower rows getting the extra players.
 function distributeRows(players: PlayerWithPlace[]): PlayerWithPlace[][] {
   const count = players.length
   if (count === 0) {

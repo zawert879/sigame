@@ -4,19 +4,9 @@ const net = require('net')
 const os = require('os')
 const path = require('path')
 
-// Starts the built app and checks that it really serves the game: every page of the static frontend
-// and every /_next asset they reference, the REST API and socket.io. Catches what typecheck, lint and
-// the tests cannot: broken runtime imports in the compiled server, an incomplete static export,
-// a packaged executable without its assets.
-// Usage: node scripts/smoke.js [executable]
-//   no argument — the compiled server (si-game-service/dist), run `yarn build` first;
-//   executable  — a packaged build for this machine, e.g. release/sigame-macos-arm64.
-
 const STARTUP_TIMEOUT_MS = 30000
 const REQUEST_TIMEOUT_MS = 10000
 
-// Every page of the static export and a URL that must serve it: /admin/<id> and /player/<id> are not
-// prerendered, the server falls back to admin.html / player.html. Next writes the page into __NEXT_DATA__.
 const PAGES = [
   { url: '/', page: '/' },
   { url: '/admin/smoke-test', page: '/admin' },
@@ -48,7 +38,6 @@ const freePort = () => new Promise((resolve, reject) => {
   })
 })
 
-// Runs the server in a temporary working directory (packs, extracted files) with the default settings.
 const startServer = async executable => {
   const target = executable ?? serverEntry
   if (!fs.existsSync(target)) {
@@ -63,7 +52,6 @@ const startServer = async executable => {
     SIQ_DIR: path.join(workDir, 'siq'),
     PACKAGES_DIR: path.join(workDir, 'packages'),
   }
-  // the defaults are what ships: open control, frontend next to the compiled server / inside the executable
   delete env.ADMIN_TOKEN
   delete env.FRONTEND_STATIC_DIR
 
@@ -115,7 +103,6 @@ const startServer = async executable => {
   const stop = async () => {
     if (exitReason === null) {
       child.kill()
-      // an unref'd timer: it must not keep this process alive once the server is gone
       await Promise.race([exited, new Promise(resolve => {
         setTimeout(resolve, 5000).unref()
       })])
@@ -127,7 +114,6 @@ const startServer = async executable => {
   return { base, waitUntilListening, stop, output: () => output, exitReason: () => exitReason }
 }
 
-// socket.io-client is a dev dependency of the service (its tests use it)
 const requestOverSocket = (base, event, payload) => new Promise((resolve, reject) => {
   const { io } = require(require.resolve('socket.io-client', { paths: [serviceDir] }))
   const socket = io(base, { reconnection: false, timeout: REQUEST_TIMEOUT_MS })
@@ -180,7 +166,6 @@ const runChecks = async server => {
     await Promise.all([...assets].map(async asset => {
       const response = await get(server.base + asset)
       await response.arrayBuffer()
-      // the SPA fallback answers an unknown path with index.html, so a missing file is 200 text/html too
       const type = response.headers.get('content-type') ?? ''
       if (response.status !== 200 || type.startsWith('text/html')) {
         missing.push(`${asset} (${response.status} ${type})`)

@@ -30,7 +30,6 @@ export const PlayerItem: React.FC<{ player: Player, deletePlayer: (id: string) =
     saveNameDebounced(event.target.value)
   }, [saveNameDebounced])
 
-  // the player's button is the next key pressed in this field
   const onChangeKey = useCallback(async (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Tab') {
       return

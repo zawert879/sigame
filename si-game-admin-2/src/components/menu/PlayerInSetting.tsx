@@ -14,7 +14,6 @@ export const PlayerInSetting: FC<{
   const handleChangeName = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     changeName(event.target.value)
   }, [changeName])
-  // the player's button is the next key pressed in this field
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Tab') {
       return

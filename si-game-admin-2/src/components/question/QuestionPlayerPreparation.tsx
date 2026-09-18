@@ -2,7 +2,6 @@ import { FC } from "react";
 import { QuestionType } from "./QuestionType";
 import { PayloadStartQuestion } from "@/types";
 
-// Special question (stake, secret, no risk…): the player screen shows its type until the host continues.
 export const QuestionPlayerPreparation: FC<{ question: PayloadStartQuestion }> = ({ question }) => {
   return (
     <div className="w-screen h-screen">

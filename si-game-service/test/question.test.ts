@@ -13,7 +13,6 @@ beforeAll(() => {
   dir = makeTempDir('question-')
 })
 
-// the real pipeline: zip → parseSIQ → SiqPackage → Round → Theme → Question
 const loadPackage = (entries: ZipEntries): SiqPackage => new SiqPackage(parseSIQ(writeZip(path.join(dir, `p${counter++}.siq`), entries)))
 
 const parseQuestions = (questionsXml: string): Question[] =>
@@ -62,6 +61,12 @@ describe('PageBuilder', () => {
     ])
   })
 
+  test('setHtmlFile makes a page of its own kind; every snapshot carries html and htmlFile', () => {
+    const pages = new PageBuilder().setHtmlFile('a.html').saveAndNextPage().setHtml('<p>x</p>').finish()
+    expect(pages.map(item => item.snapshot)).toStrictEqual([page({ htmlFile: 'a.html' }), page({ html: '<p>x</p>' })])
+    expect(pages.map(item => [item.html, item.htmlFile])).toEqual([[null, 'a.html'], ['<p>x</p>', null]])
+  })
+
   test('endSection / finish: a waiting replic gets a page of its own, a pending page keeps it', () => {
     const builder = new PageBuilder().setReplic('alone').endSection()
     expect(builder.finish().map(item => item.snapshot)).toEqual([page({ replic: 'alone' })])
@@ -69,7 +74,6 @@ describe('PageBuilder', () => {
     const pages = new PageBuilder().setReplic('with text').setText('t').endSection().setMarker(true).setText('a').setReplic('last').finish()
     expect(pages.map(item => item.snapshot)).toEqual([page({ text: 't', replic: 'with text' }), page({ isMarker: true, text: 'a', replic: 'last' })])
 
-    // nothing waits: nothing is added
     expect(new PageBuilder().endSection().finish()).toEqual([])
   })
 
@@ -211,7 +215,6 @@ describe('Question: SIQ 4 fixture pack (type + scenario)', () => {
     expect(question.themeName).toBe('Кошки')
     expect(question.selectPrice).toEqual({ minimum: 300, maximum: 300, step: 0, type: CostType.ACCURATE })
     expect(question.selectionMode).toBe(SelectionModeType.EXCEPT_CURRENT)
-    // no marker in the scenario: an answer page with the right answer is added
     expect(question.pages).toEqual([page({ text: 'Кот в мешке' }), page({ isMarker: true, text: 'Мяу' })])
   })
 
@@ -238,7 +241,7 @@ describe('Question: SIQ 4 fixture pack (type + scenario)', () => {
     expect(question.type).toBe(QuestionType.SECRET)
     expect(question.selectPrice).toEqual({ minimum: 0, maximum: 0, step: 0, type: CostType.MIN_OR_MAX_IN_ROUND })
     expect(question.selectionMode).toBe(SelectionModeType.ANY)
-    expect(question.pages).toEqual([page({ html: 'page.html' }), page({ isMarker: true, text: 'Ответ' })])
+    expect(question.pages).toEqual([page({ htmlFile: 'page.html' }), page({ isMarker: true, text: 'Ответ' })])
   })
 
   test('scenario details: a second marker is ignored, empty and unknown atoms are skipped, text keeps its \'@\'', () => {
@@ -257,6 +260,61 @@ describe('Question: SIQ 4 fixture pack (type + scenario)', () => {
       page({ voice: 'a.mp3' }),
     ])
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('неизвестный тип atom "weird"'))
+  })
+})
+
+describe('Question: html content', () => {
+  test('SIQ 5: an isRef html item is a file of the pack (htmlFile); inline markup and URLs stay html', () => {
+    const question = parseQuestion(`<question price="100"><params>
+      <param name="question" type="content">
+        <item type="html" isRef="True">page.html</item>
+        <item type="html" isRef="true">страница 2.html</item>
+        <item type="html">&lt;b&gt;Жирный&lt;/b&gt;</item>
+        <item type="html">https://example.com/a.html</item>
+        <item type="html" isRef="True">https://example.com/b.html</item>
+        <item type="html" isRef="True">//example.com/c.html</item>
+        <item type="html" isRef="False">d.html</item>
+      </param>
+      <param name="answer" type="content"><item type="html" isRef="True">answer.html</item></param>
+    </params><right><answer>a</answer></right></question>`)
+    expect(question.pages).toStrictEqual([
+      page({ htmlFile: 'page.html' }),
+      page({ htmlFile: 'страница 2.html' }),
+      page({ html: '<b>Жирный</b>' }),
+      page({ html: 'https://example.com/a.html' }),
+      page({ html: 'https://example.com/b.html' }),
+      page({ html: '//example.com/c.html' }),
+      page({ html: 'd.html' }),
+      page({ isMarker: true, htmlFile: 'answer.html' }),
+    ])
+  })
+
+  test('SIQ 4: an \'@\' html atom is a file of the pack (htmlFile); inline markup and URLs stay html', () => {
+    const question = parseQuestion(`<question price="100"><scenario>
+      <atom type="html">@page.html</atom>
+      <atom type="html">&lt;i&gt;курсив&lt;/i&gt;</atom>
+      <atom type="html">https://example.com/a.html</atom>
+      <atom type="html">@</atom>
+      <atom type="marker" />
+      <atom type="html">@ответ.html</atom>
+    </scenario><right><answer>a</answer></right></question>`)
+    expect(question.pages).toStrictEqual([
+      page({ htmlFile: 'page.html' }),
+      page({ html: '<i>курсив</i>' }),
+      page({ html: 'https://example.com/a.html' }),
+      page({ html: '@' }),
+      page({ isMarker: true, htmlFile: 'ответ.html' }),
+    ])
+  })
+
+  test('the payloads of a question carry htmlFile (null when there is none)', () => {
+    const question = parseQuestion(`<question price="100"><params>
+      <param name="question" type="content"><item>текст</item><item type="html" isRef="True">page.html</item></param>
+    </params><right><answer>a</answer></right></question>`)
+    expect(question.currentPage).toStrictEqual(page({ text: 'текст' }))
+    expect(question.currentPage).toHaveProperty('htmlFile', null)
+    expect(question.nextPage).toStrictEqual(page({ htmlFile: 'page.html' }))
+    expect(question.nextPage).toHaveProperty('html', null)
   })
 })
 

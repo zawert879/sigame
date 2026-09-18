@@ -8,8 +8,8 @@ const serviceDir = path.join(root, 'si-game-service')
 const frontendOutDir = path.join(adminDir, 'out')
 const servicePublicDir = path.join(serviceDir, 'dist', 'public')
 
-const run = (command, cwd) => {
-  execSync(command, { cwd, stdio: 'inherit', shell: true })
+const run = (command, cwd, env = process.env) => {
+  execSync(command, { cwd, env, stdio: 'inherit', shell: true })
 }
 
 const copyDir = (source, target) => {
@@ -18,7 +18,7 @@ const copyDir = (source, target) => {
   fs.cpSync(source, target, { recursive: true })
 }
 
-run('yarn build', adminDir)
+run('yarn build', adminDir, { ...process.env, NEXT_PUBLIC_SERVER_URL: '' })
 run('yarn build', serviceDir)
 
 if (!fs.existsSync(frontendOutDir)) {

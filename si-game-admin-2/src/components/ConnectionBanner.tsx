@@ -1,7 +1,6 @@
 import { FC } from "react"
 import { useConnectionStatus } from "@/hooks/useConnectionStatus"
 
-// Small unobtrusive notice shown while the socket is disconnected; socket.io reconnects by itself.
 export const ConnectionBanner: FC = () => {
   const status = useConnectionStatus()
   if (status !== 'disconnected') {

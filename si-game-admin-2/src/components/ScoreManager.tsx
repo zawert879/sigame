@@ -6,11 +6,10 @@ import { useGameStore } from "@/store/game"
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback"
 import { notifyError } from "@/utils/notify"
 
-// Price of the current question: quick +/- buttons (small / big step) and manual input.
 export const ScoreManager: FC = () => {
   const scoreValue = useGameStore(state => state.scoreValue)
-  const big = useGameStore(state => state.meta?.scoreBig ?? 0)
-  const little = useGameStore(state => state.meta?.scoreLittle ?? 0)
+  const big = useGameStore(state => state.settings?.big ?? state.meta?.scoreBig ?? 0)
+  const little = useGameStore(state => state.settings?.little ?? state.meta?.scoreLittle ?? 0)
 
   const run = useCallback(async (request: () => Promise<void>) => {
     try {

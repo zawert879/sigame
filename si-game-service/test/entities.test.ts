@@ -9,7 +9,6 @@ import { Score } from '../src/entity/Score'
 import { GameEvent } from '../src/events'
 import { makeTempDir, siq4Entries, writeZip } from './helpers/fixtures'
 
-// a GameContainer whose emitted events are recorded
 function container() {
   const eventEmitter = new EventEmitter()
   const events: Array<[GameEvent, unknown]> = []
@@ -97,7 +96,6 @@ describe('QueuePlayers', () => {
     expect(queue.queue).toEqual([a.id, c.id])
     expect(queue.getPlayer(c.id)).toBe(1)
 
-    // a copy: callers cannot change the queue
     queue.queue.push('x')
     expect(queue.queue).toEqual([a.id, c.id])
 
@@ -176,7 +174,6 @@ describe('AppState', () => {
     first.on(GameEvent.Exit, onExit)
 
     const closing = appState.closeGame(first.id)
-    // out of the list at once, the media go in the background
     expect(appState.games).toEqual([second])
     await closing
     await appState.closeGame(first.id)
@@ -193,7 +190,6 @@ describe('AppState', () => {
     const appState = new AppState()
     const game = appState.newGame('Первая')
     await game.loadPack(writeZip(path.join(makeTempDir('app-'), 'p.siq'), siq4Entries()))
-    // Windows: a file held open by an antivirus; rm gives up after its retries
     const rm = jest.spyOn(fs.promises, 'rm').mockRejectedValueOnce(Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' }))
     try {
       await expect(appState.closeGame(game.id)).resolves.toBeUndefined()
@@ -206,7 +202,6 @@ describe('AppState', () => {
     expect(game.isClosed).toBe(true)
     expect(appState.games).toEqual([])
     expect(appState.findGame(game.id)).toBeNull()
-    // the leftover is removed at a later start (utils/packages.ts removeStaleMedia)
     expect(fs.existsSync(game.packDir)).toBe(true)
   })
 

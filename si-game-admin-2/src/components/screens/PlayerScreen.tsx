@@ -14,11 +14,12 @@ import { PlayerPanel } from "@/components/PlayerPanel"
 import { Results } from "@/components/Results"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { GameStatusView } from "./GameStatusView"
+import { FirstGameRedirect } from "./FirstGameRedirect"
+import { FullscreenButton, FullscreenCornerButton } from "@/components/FullscreenButton"
 import { SoundType, useSound } from "@/hooks/useSound"
 import { useGameConnection } from "@/hooks/useGameConnection"
 import { useGameStore } from "@/store/game"
 
-// Game screen for the players (TV).
 export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }> = ({ gameId, resolved }) => {
   const router = useRouter()
   const { playSound } = useSound()
@@ -40,8 +41,6 @@ export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }>
 
   const isReady = !!gameId && loadedGameId === gameId && status === 'ready'
 
-  // Sounds when a screen is entered: the round name and the list of the pack's themes. A snapshot reloaded after a
-  // reconnect does not replay them.
   const soundKey = !isReady
     ? undefined
     : screen === Data.Screen.RoundName
@@ -61,20 +60,18 @@ export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }>
   }, [soundKey, playSound])
 
   if (resolved && !gameId) {
-    return <GameStatusView status="noId" error={null} className="h-screen" />
+    return <FirstGameRedirect route="player" />
   }
 
   if (!isReady) {
     return (
       <>
         <ConnectionBanner />
-        <GameStatusView status={loadedGameId === gameId ? status : 'loading'} error={error} className="h-screen" />
+        <GameStatusView route="player" status={loadedGameId === gameId ? status : 'loading'} error={error} className="h-screen" />
       </>
     )
   }
 
-  // Never carries the admin token: the players look at this screen and can scan the QR. The host device gets the
-  // token from the host link printed by the server (it is remembered in localStorage), GO on this device uses its own.
   const adminPath = `/admin/${encodeURIComponent(gameId)}`
 
   return (
@@ -83,7 +80,10 @@ export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }>
       {screen === Data.Screen.Initial && (<>
         <div className="bg-blue-700 h-[100vh] flex flex-col justify-center items-center w-screen text-yellow-200 text-9xl">
           <QRCode value={`${window.location.origin}${adminPath}`} color="white" size={600} />
-          <Button onClick={() => { void router.push(adminPath) }}> GO </Button>
+          <div className="mt-6 flex flex-wrap justify-center items-center gap-4">
+            <Button size="large" onClick={() => { void router.push(adminPath) }}> GO </Button>
+            <FullscreenButton />
+          </div>
         </div>
       </>)}
       {screen !== Data.Screen.Initial &&
@@ -100,6 +100,7 @@ export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }>
             {screen === Data.Screen.QuestionPreparation && question && <QuestionPlayerPreparation question={question} />}
             {screen === Data.Screen.Results && <Results players={players} isLastRound={isLastRound} />}
           </div>
+          <FullscreenCornerButton />
         </div>
       }
     </>

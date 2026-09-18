@@ -20,13 +20,11 @@ import type {
 import { page, siq4Entries, siq5Entries, writeZip } from './helpers/fixtures'
 import { isAckError, startServer, TestClient, type TestServer, waitUntil } from './helpers/server'
 
-// every client → server event (pushes are the on* events)
 const requestEvents = Object.values(Event).filter(event => !/^on[A-Z]/.test(event))
 const lobbyEvents: string[] = [Event.GetGames, Event.GetGame, Event.SelectGame, Event.NewGame]
 
-// sockets subscribed to the pushes of a game: each subscribed Controller adds one listener per game event
-const subscribers = (game: Game): number =>
-  (game as unknown as { _eventEmitter: EventEmitter })._eventEmitter.listenerCount(GameEvent.UpdatePlayers)
+const subscribers = (game: Game, event: GameEvent = GameEvent.UpdatePlayers): number =>
+  (game as unknown as { _eventEmitter: EventEmitter })._eventEmitter.listenerCount(event)
 
 describe('socket API', () => {
   let server: TestServer
@@ -38,7 +36,6 @@ describe('socket API', () => {
     return client.connected()
   }
 
-  // a new game selected by every given socket
   const gameFor = async (...sockets: TestClient[]): Promise<string> => {
     const { gameId } = await sockets[0].request<ResponseNewGame>(Event.NewGame, { gameName: 'Тест' })
     for (const socket of sockets) {
@@ -113,7 +110,6 @@ describe('socket API', () => {
       expect(isAckError(response) && [AckErrorCode.GameNotSelected, AckErrorCode.InvalidPayload].includes(response.error)).toBe(true)
     }
 
-    // requests without a payload are requests with {}
     for (const event of [Event.Next, Event.Exit, Event.GetPlayers, Event.AddPlayer, Event.GetSettings, Event.RepeatQuestion]) {
       expect(responses.get(event)).toEqual({ error: AckErrorCode.GameNotSelected, message: expect.any(String) as string })
       // eslint-disable-next-line no-await-in-loop
@@ -134,7 +130,6 @@ describe('socket API', () => {
     expect([...responses.keys()]).toEqual(ordered)
     expect(responses.get(Event.Next)).toEqual({})
     expect(responses.get(Event.AddPlayer)).toEqual({})
-    // addPlayer comes before getPlayers in the enum
     expect(responses.get(Event.GetPlayers)).toEqual([expect.objectContaining({ name: '', queue: null })])
     expect(responses.get(Event.GetSettings)).toMatchObject({ big: 100, little: 20, scoreValue: 0 })
     expect(responses.get(Event.SelectPack)).toMatchObject({ error: AckErrorCode.InvalidPayload })
@@ -149,7 +144,6 @@ describe('socket API', () => {
     expect(await client.request(Event.Next)).toEqual({ error: AckErrorCode.GameNotSelected, message: expect.any(String) as string })
 
     await gameFor(client)
-    // an unknown game keeps the current selection
     expect(await client.request(Event.SelectGame, { gameId: 'nope' })).toEqual(notFound)
     expect(await client.request(Event.GetPlayers)).toEqual([])
 
@@ -176,14 +170,12 @@ describe('socket API', () => {
       expect(response.message).toMatch(/^Некорректные данные запроса: /)
     }
 
-    // FAILED: a valid request that could not be done
     expect(await client.request(Event.SelectPack, { file: 'missing.siq' }))
       .toEqual({ error: AckErrorCode.Failed, message: expect.stringContaining('missing.siq') as string })
     expect(await client.request(Event.SelectQuestion, { questionId: 'nope' }))
       .toEqual({ error: AckErrorCode.Failed, message: 'Пак не выбран' })
     expect((await client.ackError(Event.SelectPack, { file: 'broken.siq' })).error).toBe(AckErrorCode.Failed)
 
-    // the game is still usable after the failures
     expect(await client.request(Event.SelectPack, { file: 'test4.siq' })).toEqual({})
     expect(await client.request(Event.SelectQuestion, { questionId: 'nope' }))
       .toEqual({ error: AckErrorCode.Failed, message: 'Вопрос не найден в текущем раунде' })
@@ -237,7 +229,6 @@ describe('socket API', () => {
     await a.sync()
     expect(a.since(from)).toEqual([])
 
-    // requests and pushes now belong to the second game
     await a.request(Event.AddPlayer)
     expect(a.since(from, Event.OnUpdatePlayers)).toHaveLength(1)
     expect(await a.request<Player[]>(Event.GetPlayers)).toHaveLength(1)
@@ -257,7 +248,6 @@ describe('socket API', () => {
       return from
     }
 
-    // next until the question is over (Table or Results)
     const finish = async (from: number): Promise<number> => {
       const isOver = () => admin.since(from, Event.OnStartTable).length > 0 || admin.since(from, Event.OnStartResults).length > 0
       for (let step = 0; step < 20 && !isOver(); step++) {
@@ -275,7 +265,6 @@ describe('socket API', () => {
       return finish(from)
     }
 
-    // players
     let from = admin.mark()
     expect(await admin.request(Event.AddPlayer)).toEqual({})
     const added = admin.payloads<EventUpdatePlayers>(from, Event.OnUpdatePlayers)
@@ -285,7 +274,6 @@ describe('socket API', () => {
     await admin.request(Event.UpdatePlayer, { playerId: vasya.id, name: '  Вася ', keyboardKey: 'KeyA' })
     await admin.request(Event.UpdatePlayer, { playerId: petya.id, name: 'Петя', keyboardKey: 'KeyB' })
 
-    // pack → Screensaver
     let displayFrom = display.mark()
     from = admin.mark()
     expect(await admin.request(Event.SelectPack, { file: 'test5.siq' })).toEqual({})
@@ -293,7 +281,6 @@ describe('socket API', () => {
     expect(admin.payloads(from, Event.OnUpdateScoreValue)).toEqual([{ scoreValue: 0 }])
     await display.waitFor(Event.OnStartScreensaver, { from: displayFrom })
 
-    // intro screens
     from = await next()
     expect(admin.payloads(from, Event.OnStartThemeList)).toEqual([{ payload: { themes: ['Тема 1', 'Тема 2', 'Тема 3', 'Ф1', 'Ф2', 'Ф3'] } }])
     from = await next()
@@ -302,7 +289,6 @@ describe('socket API', () => {
     from = await next()
     expect(admin.payloads(from, Event.OnStartThemeListInRound)).toEqual([{ payload: { themes: ['Тема 1', 'Тема 2', 'Тема 3'] } }])
 
-    // table
     displayFrom = display.mark()
     from = await next()
     const [table] = admin.payloads<EventStartTable>(from, Event.OnStartTable)
@@ -316,7 +302,6 @@ describe('socket API', () => {
     const ids = new Map(table.payload.themes.flatMap(theme => theme.questions).map(item => [item.price, item.id]))
     const id = (price: number): string => ids.get(price) ?? ''
 
-    // question 100
     displayFrom = display.mark()
     from = admin.mark()
     await admin.request(Event.SelectQuestion, { questionId: id(100) })
@@ -343,7 +328,6 @@ describe('socket API', () => {
     expect(admin.payloads(from, Event.OnUpdateScoreValue)).toEqual([{ scoreValue: 100 }])
     expect(await display.waitFor(Event.OnStartQuestion, { from: displayFrom })).toEqual(started)
 
-    // the player display sends the button press
     from = admin.mark()
     expect(await display.request(Event.KeyPress, { key: 'a', code: 'KeyA' })).toEqual({})
     const queued = await admin.waitFor<EventUpdatePlayers>(Event.OnUpdatePlayers, { from })
@@ -353,7 +337,6 @@ describe('socket API', () => {
     expect(admin.payloads(from, Event.OnUpdateQuestionPage))
       .toEqual([{ payload: { pageIndex: 1, pagesCount: 3, currentPage: page({ image: 'pic 1.png' }), nextPage: page({ isMarker: true, text: 'Бонд' }) } }])
 
-    // right answer: score, selector and the answer page
     from = admin.mark()
     await admin.request(Event.WinPlayer, { playerId: vasya.id })
     const winPushes = admin.payloads<EventUpdatePlayers>(from, Event.OnUpdatePlayers)
@@ -368,7 +351,6 @@ describe('socket API', () => {
     expect(afterQuestion.payload.currentSelector).toBe(vasya.id)
     expect(afterQuestion.payload.themes[0].questions[0]).toEqual({ id: id(100), price: 100, isAvailable: false })
 
-    // what a reloaded page gets
     expect(await display.request<ResponseGetGame>(Event.GetGame, { gameId })).toMatchObject({
       gameId,
       packageName: 'Тестовый пак',
@@ -377,7 +359,6 @@ describe('socket API', () => {
       screenData: { screen: Screen.Table, payload: afterQuestion.payload },
     })
 
-    // stake: QuestionPreparation, the host sets the price and the player, buttons stay off
     from = admin.mark()
     await admin.request(Event.SelectQuestion, { questionId: id(200) })
     expect(admin.payloads<EventStartQuestion>(from, Event.onStartQuestionPreparation)[0].payload)
@@ -392,13 +373,11 @@ describe('socket API', () => {
     expect(admin.since(from)).toEqual([])
     await finish(admin.mark())
 
-    // answer group
     from = await play(id(300))
     expect(admin.payloads<EventStartQuestion>(from, Event.OnStartQuestion)[0].payload)
       .toMatchObject({ answerType: QuestionAnswerType.Group, answerGroup: [{ answer: 'Один', variant: 'A' }] })
     await play(id(400))
 
-    // the last question of the round → Results instead of the Table
     displayFrom = display.mark()
     from = await play(id(500))
     expect(admin.since(from, Event.OnStartTable)).toEqual([])
@@ -409,7 +388,6 @@ describe('socket API', () => {
     expect(await display.waitFor(Event.OnStartResults, { from: displayFrom })).toEqual(results)
     expect((await display.request<ResponseGetGame>(Event.GetGame, { gameId })).screenData).toEqual({ screen: Screen.Results, payload: results.payload })
 
-    // final round
     from = await next()
     expect(admin.payloads(from, Event.OnStartRoundName))
       .toEqual([{ payload: { name: 'Финал', progress: { roundIndex: 1, roundsCount: 2, questionsPlayed: 0, questionsTotal: 3 } } }])
@@ -443,7 +421,6 @@ describe('socket API', () => {
     expect(finalResults.payload).toMatchObject({ isLastRound: true, progress: { roundIndex: 1, roundsCount: 2, questionsPlayed: 3, questionsTotal: 3 } })
     await display.waitFor(Event.OnStartResults, { from: displayFrom })
 
-    // the end of the game: next and nextRound change nothing
     displayFrom = display.mark()
     from = admin.mark()
     expect(await admin.request(Event.Next)).toEqual({})
@@ -478,6 +455,71 @@ describe('socket API', () => {
     expect(await display.waitFor(Event.OnUpdateMediaPlayer, { from: mediaFrom })).toEqual({ time: 12.5, isPlaying: false })
   })
 
+  test('settings changes push onUpdateSettings with the whole settings to every socket of the game', async () => {
+    const admin = await connect()
+    const display = await connect()
+    const other = await connect()
+    const gameId = await gameFor(admin, display)
+    await gameFor(other)
+    const game = findGame(gameId)
+    expect(subscribers(game, GameEvent.UpdateSettings)).toBe(2)
+
+    const from = display.mark()
+    const adminFrom = admin.mark()
+    const otherFrom = other.mark()
+    await admin.request(Event.SetScoreLittle, { value: 25 })
+    await admin.request(Event.SetScoreBig, { value: 250 })
+    await admin.request(Event.SetVolumeSettings, { player: 40, admin: 60 })
+    await display.sync()
+    await admin.sync()
+
+    const expected: ResponseGetSettings[] = [
+      { scoreValue: 0, big: 100, little: 25, playerVolume: 100, adminVolume: 100 },
+      { scoreValue: 0, big: 250, little: 25, playerVolume: 100, adminVolume: 100 },
+      { scoreValue: 0, big: 250, little: 25, playerVolume: 40, adminVolume: 60 },
+    ]
+    expect(display.payloads<ResponseGetSettings>(from, Event.OnUpdateSettings)).toEqual(expected)
+    expect(admin.payloads<ResponseGetSettings>(adminFrom, Event.OnUpdateSettings)).toEqual(expected)
+    expect(await display.request<ResponseGetSettings>(Event.GetSettings)).toEqual(expected[2])
+    await other.sync()
+    expect(other.since(otherFrom, Event.OnUpdateSettings)).toEqual([])
+
+    const scoreFrom = display.mark()
+    await admin.request(Event.SubmitScoreBigPlus)
+    await admin.request(Event.SetScoreValue, { value: 7 })
+    await display.sync()
+    expect(display.since(scoreFrom, Event.OnUpdateSettings)).toEqual([])
+    expect(display.since(scoreFrom, Event.OnUpdateScoreValue)).toHaveLength(2)
+
+    const invalidFrom = display.mark()
+    expect(await admin.ackError(Event.SetVolumeSettings, { player: 101, admin: 0 })).toMatchObject({ error: AckErrorCode.InvalidPayload })
+    await display.sync()
+    expect(display.since(invalidFrom, Event.OnUpdateSettings)).toEqual([])
+  })
+
+  test('onUpdateSettings stops after the socket selects another game or disconnects', async () => {
+    const admin = await connect()
+    const display = await connect()
+    const first = await gameFor(admin, display)
+    const { gameId: second } = await admin.request<ResponseNewGame>(Event.NewGame, { gameName: 'Другая' })
+    expect(subscribers(findGame(first), GameEvent.UpdateSettings)).toBe(2)
+
+    await display.request(Event.SelectGame, { gameId: second })
+    expect(subscribers(findGame(first), GameEvent.UpdateSettings)).toBe(1)
+    expect(subscribers(findGame(second), GameEvent.UpdateSettings)).toBe(1)
+    const from = display.mark()
+    const adminFrom = admin.mark()
+    await admin.request(Event.SetScoreBig, { value: 300 })
+    await display.sync()
+    await admin.sync()
+    expect(display.since(from, Event.OnUpdateSettings)).toEqual([])
+    expect(admin.payloads<ResponseGetSettings>(adminFrom, Event.OnUpdateSettings)).toEqual([expect.objectContaining({ big: 300 })])
+
+    admin.close()
+    await waitUntil(() => subscribers(findGame(first), GameEvent.UpdateSettings) === 0, 'the disconnected socket unsubscribes')
+    expect(subscribers(findGame(first))).toBe(0)
+  })
+
   test('exit: every socket of the game gets onExit and has no game any more; a new Default game replaces it', async () => {
     const admin = await connect()
     const display = await connect()
@@ -508,10 +550,8 @@ describe('socket API', () => {
     expect(gamesAfter.some(game => game.gameId === gameId)).toBe(false)
     expect(gamesAfter.filter(game => !gamesBefore.some(before => before.gameId === game.gameId)))
       .toEqual([{ gameId: expect.any(String) as string, gameName: 'Default', packageName: null }])
-    // the media are removed in the background
     await waitUntil(() => !fs.existsSync(packDir), 'the media of the closed game are removed')
 
-    // other games go on
     await other.sync()
     expect(other.since(otherFrom, Event.OnExit)).toEqual([])
     expect(await other.request(Event.GetPlayers)).toEqual([])
@@ -523,7 +563,6 @@ describe('socket API', () => {
     await admin.request(Event.SelectPack, { file: 'test4.siq' })
     const { packDir } = findGame(gameId)
     const gamesBefore = await admin.request<ResponseGetGames>(Event.GetGames)
-    // Windows: a freshly extracted file held by an antivirus; rm gives up after its retries
     const rm = jest.spyOn(fs.promises, 'rm').mockImplementation(async target => {
       throw Object.assign(new Error(`EBUSY: resource busy or locked, rm '${String(target)}'`), { code: 'EBUSY' })
     })
@@ -537,7 +576,7 @@ describe('socket API', () => {
     const games = await admin.request<ResponseGetGames>(Event.GetGames)
     expect(games.some(game => game.gameId === gameId)).toBe(false)
     expect((await admin.ackError(Event.SelectGame, { gameId })).error).toBe(AckErrorCode.GameNotFound)
-    expect(fs.existsSync(packDir)).toBe(true) // removed at a later start
+    expect(fs.existsSync(packDir)).toBe(true)
 
     const created = games.filter(game => !gamesBefore.some(before => before.gameId === game.gameId))
     expect(created).toEqual([expect.objectContaining({ gameName: 'Default' })])
@@ -559,7 +598,6 @@ describe('socket API', () => {
     await display.request(Event.SelectGame, { gameId })
     expect(subscribers(game)).toBe(2)
 
-    // the connection drops (Wi-Fi, sleep, server restart ...): the server forgets its subscription
     display.close()
     await waitUntil(() => subscribers(game) === 1, 'the closed socket is unsubscribed')
 
@@ -616,8 +654,6 @@ describe('socket API', () => {
     expect(await admin.request<Player[]>(Event.GetPlayers)).toEqual([expect.objectContaining({ id: petya.id, queue: 0 })])
   })
 
-  // The client merges a pushed player over its copy (si-game-admin-2/src/store/players.ts mergePlayers): a push with
-  // `queue: null` would erase the queue mark of a queued player on any score / name / win change.
   test('player update pushes keep the queue position of the player', async () => {
     const admin = await connect()
     const gameId = await gameFor(admin)

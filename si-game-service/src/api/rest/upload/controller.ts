@@ -10,10 +10,8 @@ import { toArray } from '../../../utils/siqValue'
 import { forgetPackName } from '../packs/controller'
 
 const MAX_FILE_SIZE = 1024 * 1024 * 1024
-// the multipart field of the packs
 const FILE_FIELD = 'file'
 
-// a formidable file as koa-body puts it into ctx.request.files
 type UploadedFile = Extract<NonNullable<Context['request']['files']>[string], { filepath: string }>
 
 const parseMultipart = koaBody({
@@ -23,17 +21,13 @@ const parseMultipart = koaBody({
   text: false,
   formidable: {
     maxFileSize: MAX_FILE_SIZE,
-    // file parts of any other field are dropped, not written to the temp dir
     filter: ({ name }) => name === FILE_FIELD,
   },
 })
 
-// every temp file formidable wrote for the request
 const uploadedFiles = (ctx: Context): UploadedFile[] =>
   Object.values(ctx.request.files ?? {}).flatMap(files => toArray<UploadedFile>(files))
 
-// Multipart parsing for the upload route only (after the admin check, so no temp file is written for a
-// rejected request). Formidable removes its partial temp files itself when parsing fails.
 const parseUpload = async (ctx: Context, next: Next) => {
   try {
     await parseMultipart(ctx, async () => undefined)
@@ -48,7 +42,6 @@ const parseUpload = async (ctx: Context, next: Next) => {
   await next()
 }
 
-// rename, or copy + unlink when the temp dir is on another device
 async function moveFile(source: string, target: string) {
   try {
     await fs.rename(source, target)
@@ -57,7 +50,6 @@ async function moveFile(source: string, target: string) {
       throw error
     }
 
-    // copy next to the target first so a half-written file never shows up under the final .siq name
     const partial = path.join(path.dirname(target), `.${randomUUID()}.part`)
     try {
       await fs.copyFile(source, partial)
@@ -115,7 +107,6 @@ const upload = async (ctx: Context) => {
     ctx.status = 500
     ctx.body = { error: 'FAILED' }
   } finally {
-    // the temp files are never kept: moved files are already gone, the rest (of any field) is removed here
     await Promise.all(uploadedFiles(ctx).map(async file => fs.rm(file.filepath, { force: true }).catch(() => undefined)))
   }
 }
