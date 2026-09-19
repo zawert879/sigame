@@ -144,7 +144,14 @@ stdout — строки `ПРЕФИКС {json}` (UTF-8, одна строка н
 - Состояние `LauncherState` (camelCase JSON): `status` (`starting|ready|failed|stopped`), `message`, `port`, `addresses`,
   `selectedAddress`, `gameId`, `adminToken`, `connections {player, admin}`, `packsCount`, `siqDir`, `logDir`, `version`,
   `platform` (`macos|windows|linux`), `tvBrowser` (имя найденного Chrome/Edge или `null`),
-  `firewall` (`allowed|missing|unknown|unsupported`). Команда `get_state`; событие `launcher-state` при каждом изменении.
+  `firewall` (`allowed|missing|unknown|unsupported`), `serverPath` (путь сайдкара — для ручной подсказки брандмауэра).
+  Команда `get_state`; событие `launcher-state` при каждом изменении; событие `confirm-quit`, когда закрытие окна или ⌘Q
+  во время игры (есть подключённые ТВ/пульт) отложено — окно подсвечивает «Точно выйти?», повторное закрытие в течение 4 с выходит.
+- Брандмауэр Windows: `allow_firewall` одной UAC-командой удаляет все входящие правила для файла сайдкара (в том числе
+  запрещающие, которые Windows создаёт при отказе в своём запросе «Node.js JavaScript Runtime») и добавляет правило «SI Game»
+  (allow, profile any). `allowed` — только если правило «SI Game» есть и других правил для этого файла нет; путь сравнивается
+  после того же преобразования в OEM/ANSI-кодировку, что и вывод netsh. Статус перепроверяется при фокусе окна (не чаще раза в 15 с).
+- Сайдкару не передаются унаследованные `PORT`, `FRONTEND_STATIC_DIR`, `SIQ_DIR`, `PACKAGES_DIR`.
 - Команды: `select_address(address)` (запоминается в конфиге лаунчера), `qr_svg(text)` → SVG-строка,
   `open_admin()` (браузер по умолчанию, `http://127.0.0.1:<port>/admin/` + `?token=`), `open_tv()` (Chrome/Edge:
   `--app=http://127.0.0.1:<port>/player/ --start-fullscreen --autoplay-policy=no-user-gesture-required`, отдельный профиль

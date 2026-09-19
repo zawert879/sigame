@@ -65,6 +65,8 @@ fn start_locked(app: &AppHandle, launcher: &Launcher) {
     }
     let spawned = app.shell().sidecar(SIDECAR).and_then(|command| {
         command
+            .env_clear()
+            .envs(std::env::vars_os().filter(|(key, _)| !is_reserved_env(key)))
             .env("SIGAME_LAUNCHER", "1")
             .env("SIQ_DIR", &paths.siq)
             .env("PACKAGES_DIR", &paths.packages)
@@ -292,4 +294,13 @@ fn describe_exit(payload: &TerminatedPayload) -> String {
         (None, Some(signal)) => format!("сигнал {signal}"),
         (None, None) => "причина неизвестна".to_string(),
     }
+}
+
+const RESERVED_ENV: [&str; 4] = ["PORT", "FRONTEND_STATIC_DIR", "SIQ_DIR", "PACKAGES_DIR"];
+
+fn is_reserved_env(key: &std::ffi::OsStr) -> bool {
+    let key = key.to_string_lossy();
+    RESERVED_ENV
+        .iter()
+        .any(|reserved| key.eq_ignore_ascii_case(reserved))
 }

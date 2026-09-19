@@ -41,6 +41,7 @@
     platform: flag('platform', 'macos'),
     tvBrowser: flag('browser', '') || null,
     firewall: flag('firewall', flag('platform', 'macos') === 'windows' ? 'missing' : 'unsupported'),
+    serverPath: flag('platform', 'macos') === 'windows' ? 'C:\\Users\\Иван Петров\\AppData\\Local\\SI Game\\sigame-server.exe' : '/Applications/SI Game.app/Contents/MacOS/sigame-server',
   }
 
   const fail = new Set((flag('fail', '') || '').split(',').filter(Boolean))

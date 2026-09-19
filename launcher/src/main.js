@@ -414,6 +414,11 @@
     el.token.textContent = ready ? (state.adminToken ? 'включён' : 'выключен') : '—'
   }
 
+  const manualFirewallHint = () => {
+    const file = state.serverPath || 'sigame-server.exe из папки, куда установлена SI Game'
+    return `Не получилось — разрешите вручную: Панель управления → Брандмауэр Защитника Windows → Разрешить взаимодействие с приложением → Изменить параметры → Разрешить другое приложение → Обзор → ${file}, затем отметьте «Частная» и «Публичная». Если ТВ всё равно не подключается: Дополнительные параметры → Правила для входящих подключений → удалите запрещающие правила для этого файла («Node.js JavaScript Runtime»).`
+  }
+
   const renderFirewall = () => {
     const platform = state.platform
     const windows = platform === 'windows'
@@ -427,6 +432,7 @@
     el.fwAsk.hidden = !(windows && (state.firewall === 'missing' || state.firewall === 'unknown'))
     el.fwManual.hidden = !(windows && !allowed && (firewallFailed || state.firewall === 'unsupported'))
     el.fwWhy.hidden = firewallFailed
+    el.fwManual.textContent = manualFirewallHint()
     el.fwAllow.textContent = firewallBusy ? FIREWALL_BUSY_LABEL : FIREWALL_LABEL
     el.fwAllow.setAttribute('aria-busy', String(firewallBusy))
   }
@@ -594,14 +600,18 @@
     delete el.quit.dataset.confirm
   }
 
+  const armQuit = () => {
+    quitArmed = true
+    el.quit.textContent = QUIT_CONFIRM_LABEL
+    el.quit.dataset.confirm = 'true'
+    clearTimeout(quitTimer)
+    quitTimer = setTimeout(disarmQuit, 4000)
+  }
+
   el.quit.addEventListener('click', () => {
     const playing = isReady() && state.connections.player + state.connections.admin > 0
     if (playing && !quitArmed) {
-      quitArmed = true
-      el.quit.textContent = QUIT_CONFIRM_LABEL
-      el.quit.dataset.confirm = 'true'
-      clearTimeout(quitTimer)
-      quitTimer = setTimeout(disarmQuit, 4000)
+      armQuit()
       return
     }
     disarmQuit()
@@ -627,6 +637,14 @@
       await tauri.event.listen('launcher-state', event => {
         fresh = true
         apply(event.payload)
+      })
+    } catch (error) {
+      showToast(`Не удалось подписаться на обновления: ${errorText(error)}`)
+    }
+    try {
+      await tauri.event.listen('confirm-quit', () => {
+        armQuit()
+        el.quit.focus()
       })
     } catch (error) {
       showToast(`Не удалось подписаться на обновления: ${errorText(error)}`)

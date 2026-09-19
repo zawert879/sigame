@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::{Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -10,6 +11,10 @@ use crate::protocol::{Address, Connections};
 use crate::settings::{self, Settings};
 
 pub const STATE_EVENT: &str = "launcher-state";
+pub const CONFIRM_QUIT_EVENT: &str = "confirm-quit";
+
+const CLOSE_CONFIRM_WINDOW: Duration = Duration::from_secs(4);
+const FIREWALL_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -68,6 +73,13 @@ pub struct LauncherState {
     pub platform: Platform,
     pub tv_browser: Option<String>,
     pub firewall: Firewall,
+    pub server_path: Option<String>,
+}
+
+#[derive(Default)]
+struct CloseGuard {
+    deadline: Option<Instant>,
+    confirmed: bool,
 }
 
 #[derive(Default)]
@@ -86,6 +98,8 @@ pub struct Launcher {
     server: Mutex<ServerSlot>,
     pub server_exited: Condvar,
     pub lifecycle: Mutex<()>,
+    close_guard: Mutex<CloseGuard>,
+    firewall_checked: Mutex<Option<Instant>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -122,6 +136,7 @@ impl Launcher {
             platform: Platform::current(),
             tv_browser,
             firewall,
+            server_path: paths::sidecar_path().ok().map(|path| paths::display(&path)),
         };
         Self {
             settings: Mutex::new(settings::load(&settings_path)),
@@ -131,7 +146,38 @@ impl Launcher {
             server: Mutex::new(ServerSlot::default()),
             server_exited: Condvar::new(),
             lifecycle: Mutex::new(()),
+            close_guard: Mutex::new(CloseGuard::default()),
+            firewall_checked: Mutex::new(None),
         }
+    }
+
+    pub fn needs_close_confirmation(&self) -> bool {
+        let busy = {
+            let state = lock(&self.state);
+            state.status == Status::Ready && state.connections.player + state.connections.admin > 0
+        };
+        let mut guard = lock(&self.close_guard);
+        if guard.confirmed || !busy {
+            guard.confirmed = true;
+            return false;
+        }
+        let now = Instant::now();
+        if guard.deadline.is_some_and(|deadline| now < deadline) {
+            guard.confirmed = true;
+            return false;
+        }
+        guard.deadline = Some(now + CLOSE_CONFIRM_WINDOW);
+        true
+    }
+
+    pub fn firewall_check_due(&self) -> bool {
+        let mut checked = lock(&self.firewall_checked);
+        let now = Instant::now();
+        if checked.is_some_and(|last| now.duration_since(last) < FIREWALL_REFRESH_INTERVAL) {
+            return false;
+        }
+        *checked = Some(now);
+        true
     }
 
     pub fn snapshot(&self) -> LauncherState {

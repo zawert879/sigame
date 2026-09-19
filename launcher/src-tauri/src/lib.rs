@@ -14,11 +14,11 @@ use std::path::Path;
 
 use log::LevelFilter;
 use tauri::plugin::TauriPlugin;
-use tauri::{AppHandle, Manager, RunEvent, Runtime};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, WindowEvent};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 
 use crate::paths::Paths;
-use crate::state::Launcher;
+use crate::state::{Launcher, CONFIRM_QUIT_EVENT};
 
 const MAIN_WINDOW: &str = "main";
 const SETTINGS_FILE: &str = "launcher.json";
@@ -42,6 +42,17 @@ fn log_plugin<R: Runtime>(dir: &Path) -> TauriPlugin<R> {
     builder.build()
 }
 
+fn ask_to_confirm_quit(app: &AppHandle) -> bool {
+    let needs = app
+        .try_state::<Launcher>()
+        .is_some_and(|launcher| launcher.needs_close_confirmation());
+    if needs {
+        show_main_window(app);
+        let _ = app.emit(CONFIRM_QUIT_EVENT, ());
+    }
+    needs
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         let _ = window.unminimize();
@@ -61,6 +72,23 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { api, .. } => {
+                if ask_to_confirm_quit(window.app_handle()) {
+                    api.prevent_close();
+                }
+            }
+            WindowEvent::Focused(true) => {
+                let app = window.app_handle();
+                if app
+                    .try_state::<Launcher>()
+                    .is_some_and(|launcher| launcher.firewall_check_due())
+                {
+                    commands::refresh_firewall(app);
+                }
+            }
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::select_address,
@@ -108,6 +136,11 @@ pub fn run() {
         }
     };
     app.run(|app, event| match event {
+        RunEvent::ExitRequested {
+            code: None, api, ..
+        } if ask_to_confirm_quit(app) => {
+            api.prevent_exit();
+        }
         RunEvent::ExitRequested { .. } | RunEvent::Exit => server::stop(app, true),
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => show_main_window(app),

@@ -27,7 +27,9 @@ mod windows {
     use std::process::{Command, Stdio};
 
     use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
-    use windows_sys::Win32::Globalization::{MultiByteToWideChar, CP_ACP, CP_OEMCP};
+    use windows_sys::Win32::Globalization::{
+        MultiByteToWideChar, WideCharToMultiByte, CP_ACP, CP_OEMCP,
+    };
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, WaitForSingleObject, CREATE_NO_WINDOW,
     };
@@ -82,39 +84,97 @@ mod windows {
         }
     }
 
-    pub fn status(program: &Path) -> Firewall {
+    fn encode(text: &str, code_page: u32) -> Option<Vec<u8>> {
+        let wide: Vec<u16> = text.encode_utf16().collect();
+        if wide.is_empty() {
+            return Some(Vec::new());
+        }
+        let length = i32::try_from(wide.len()).ok()?;
+        unsafe {
+            let size = WideCharToMultiByte(
+                code_page,
+                0,
+                wide.as_ptr(),
+                length,
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+            );
+            if size <= 0 {
+                return None;
+            }
+            let mut bytes = vec![0u8; size as usize];
+            let written = WideCharToMultiByte(
+                code_page,
+                0,
+                wide.as_ptr(),
+                length,
+                bytes.as_mut_ptr(),
+                size,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+            );
+            if written <= 0 {
+                return None;
+            }
+            bytes.truncate(written as usize);
+            Some(bytes)
+        }
+    }
+
+    fn netsh_show(filter: &str) -> Option<std::process::Output> {
         let output = Command::new(system32("netsh.exe"))
             .args(["advfirewall", "firewall", "show", "rule"])
-            .raw_arg(format!("name=\"{RULE}\""))
-            .arg("verbose")
+            .raw_arg(filter)
+            .args(["dir=in", "verbose"])
             .stdin(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
             .output();
-        let output = match output {
-            Ok(output) => output,
+        match output {
+            Ok(output) => Some(output),
             Err(error) => {
                 log::warn!("Не удалось запустить netsh: {error}");
-                return Firewall::Unknown;
+                None
             }
+        }
+    }
+
+    fn occurrences(output: &[u8], program: &Path) -> usize {
+        let path = program.to_string_lossy();
+        let decoded = [CP_OEMCP, CP_ACP].into_iter().filter_map(|code_page| {
+            let needle = encode(&path, code_page).and_then(|bytes| decode(&bytes, code_page))?;
+            Some((decode(output, code_page)?, needle))
+        });
+        let utf8 = (
+            String::from_utf8_lossy(output).into_owned(),
+            path.to_string(),
+        );
+        decoded
+            .chain(std::iter::once(utf8))
+            .map(|(text, needle)| text.to_lowercase().matches(&needle.to_lowercase()).count())
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub fn status(program: &Path) -> Firewall {
+        let Some(own) = netsh_show(&format!("name=\"{RULE}\"")) else {
+            return Firewall::Unknown;
         };
-        if !output.status.success() {
+        if !own.status.success() {
             return Firewall::Missing;
         }
-        let needle = program.to_string_lossy().to_lowercase();
-        let texts = [
-            decode(&output.stdout, CP_OEMCP),
-            decode(&output.stdout, CP_ACP),
-            Some(String::from_utf8_lossy(&output.stdout).into_owned()),
-        ];
-        let found = texts
-            .into_iter()
-            .flatten()
-            .any(|text| text.to_lowercase().contains(&needle));
-        if found {
-            Firewall::Allowed
-        } else {
-            Firewall::Missing
+        let in_own = occurrences(&own.stdout, program);
+        if in_own == 0 {
+            return Firewall::Missing;
         }
+        let Some(all) = netsh_show("name=all") else {
+            return Firewall::Unknown;
+        };
+        if occurrences(&all.stdout, program) > in_own {
+            return Firewall::Missing;
+        }
+        Firewall::Allowed
     }
 
     fn wide(value: &OsStr) -> Vec<u16> {
@@ -122,8 +182,11 @@ mod windows {
     }
 
     pub fn allow(program: &Path) -> Result<(), String> {
-        let mut parameters = OsString::from(format!(
-            "/c netsh advfirewall firewall delete rule name=\"{RULE}\" & netsh advfirewall firewall add rule name=\"{RULE}\" dir=in action=allow program=\""
+        let mut parameters =
+            OsString::from("/c netsh advfirewall firewall delete rule name=all program=\"");
+        parameters.push(program.as_os_str());
+        parameters.push(format!(
+            "\" & netsh advfirewall firewall delete rule name=\"{RULE}\" & netsh advfirewall firewall add rule name=\"{RULE}\" dir=in action=allow program=\""
         ));
         parameters.push(program.as_os_str());
         parameters.push("\" enable=yes profile=any");
