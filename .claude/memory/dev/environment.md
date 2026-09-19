@@ -1,68 +1,43 @@
 ---
 name: dev-environment
-description: Инструменты и команды SI Game — Yarn 1, Node, сборка, dev-режимы, тесты, линт, env-переменные
+description: Инструменты и команды SI Game — Node 24, Yarn 1, build/dev/test/lint/smoke/package, env-переменные, каталоги данных
 metadata:
   type: project
 ---
 
 ## Инструменты
 
-| Что | Версия | Где зафиксировано |
-|---|---|---|
-| Yarn | **1 (classic)** — lockfile v1, `--frozen-lockfile` | `yarn.lock` в каждом приложении, CI |
-| Node | 20 в CI/Docker; локально сборка проверена на 24.21 | `Dockerfile`, `release-windows.yml` |
-| Node в exe | 16 (`pkg@5.8.1 --targets node16-win-x64`) | `scripts/package-win.js` |
-| TypeScript | 5.x; сервис — `commonjs`/`es2020`, декораторы (`bind-decorator`) | `si-game-service/tsconfig.json` |
-
-Корневой `package.json` **без зависимостей и без workspaces** — ставить в каждом приложении отдельно:
-
-```zsh
-(cd si-game-service && yarn install --frozen-lockfile)
-(cd si-game-admin-2 && yarn install --frozen-lockfile)
-```
+Node 24 (root `engines`, CI, pkg-таргеты), Yarn 1 (classic, `--frozen-lockfile`), @yao-pkg/pkg 6.22.0 (через npx в
+`scripts/package.js`). В корне нет зависимостей и workspaces — `yarn install --frozen-lockfile` в `si-game-service/` и `si-game-admin-2/`.
+`gh` CLI на машине нет; статус Actions публичного репо — через `https://api.github.com/repos/zawert879/sigame/actions/runs`.
 
 ## Команды
 
 ```zsh
 # корень
-yarn build            # next build (export → si-game-admin-2/out) → tsc сервиса → копия out/ в si-game-service/dist/public
-yarn start            # собранный сервер на :4000 (с --inspect)
-yarn package:win      # build + pkg → release/sigame.exe
+yarn build                 # admin export (NEXT_PUBLIC_SERVER_URL='') → tsc сервиса → копия out/ в si-game-service/dist/public
+yarn start                 # собранный сервер
+yarn smoke [бинарник]      # поднимает сервер/бинарник, проверяет страницы, /_next ассеты, REST, socket.io
+yarn package:win|mac|all   # release/sigame.exe, release/sigame-macos-arm64|x64 (+ .tar.gz, ad-hoc codesign только на macOS)
 
 # si-game-service/
-yarn dev              # ts-node src/index.ts — БЕЗ watch, перезапускать вручную
-yarn build            # rimraf dist && tsc → dist/si-game-service/src/index.js
-npx tsc --noEmit      # typecheck (отдельного скрипта нет)
-yarn lint             # eslint 8 + xo/xo-typescript (сейчас красный, 33 ошибки)
-yarn test             # jest (ts-jest); один файл: yarn test test/siq.test.ts; по имени: yarn test -t "next #1"
+yarn dev                   # node --watch -r ts-node/register src/index.ts
+yarn typecheck | yarn lint | yarn test
+yarn test test/game.test.ts ; yarn test -t "<имя>"
+yarn start:debug           # с --inspect
 
 # si-game-admin-2/
-yarn dev              # next dev на :3000
-yarn build            # static export → out/ (next build сам гоняет next lint)
-yarn lint             # next lint
-npx tsc --noEmit
+yarn dev                   # next dev :3000; сервер указать в .env.development.local: NEXT_PUBLIC_SERVER_URL=http://localhost:4000
+yarn typecheck | yarn lint | yarn build
 ```
 
-Точка входа собранного сервиса — `dist/si-game-service/src/index.js`, а не `dist/index.js`: `tsc` включает
-`../common`, поэтому `rootDir` = корень репо и в `dist/` появляются `common/` и `si-game-service/`.
+## Env сервера (`src/config.ts`, читаются при импорте)
 
-## Dev-режимы
+`PORT` (иначе 4000 с запасными портами), `ADMIN_TOKEN` (opt-in), `SIQ_DIR`, `PACKAGES_DIR`, `FRONTEND_STATIC_DIR`.
+Упакованный бинарник по умолчанию хранит данные в `siq/` рядом с собой, если такая папка есть, иначе
+`~/Library/Application Support/SIGame` / `%LOCALAPPDATA%\SIGame`.
 
-- **Полный (рекомендуется для проверки фич):** `yarn build && yarn start` в корне → http://localhost:4000.
-- **Раздельный:** `yarn dev` в сервисе + `yarn dev` в админке с `NEXT_PUBLIC_SERVER_URL=localhost:4000` в
-  `si-game-admin-2/.env.local`. Работают только сокеты: REST (`/api/upload`, `/api/packs`) и медиа (`/api/files/...`)
-  идут по относительным URL на :3000 и ломаются (аудит F1).
-- Для игры нужен хотя бы один `.siq` в `si-game-service/siq/` (загрузить через UI или положить руками).
+## Первый запуск скачанного бинарника
 
-## Env-переменные
-
-| Переменная | Где | Смысл |
-|---|---|---|
-| `FRONTEND_STATIC_DIR` | сервис | каталог статики фронтенда; по умолчанию `<dist>/public` |
-| `NEXT_PUBLIC_SERVER_URL` | админка (build-time) | адрес socket.io-сервера; пусто → `window.location.origin` |
-| `NODE_ENV=production` | Docker | ни на что в коде не влияет |
-
-## Тесты
-
-Jest-конфиг — `preset: ts-jest`. Реальных тестов нет (аудит A7): `siq.test.ts` требует каталог `packages/` и
-фикстуру `siq/test.siq` (оба gitignored) и проверяет устаревший порядок экранов.
+macOS 15+: Системные настройки → Конфиденциальность и безопасность → «Всё равно открыть», либо
+`xattr -d com.apple.quarantine <файл>`. Windows: SmartScreen «Подробнее → Выполнить в любом случае».

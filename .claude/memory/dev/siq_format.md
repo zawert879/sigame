@@ -1,47 +1,39 @@
 ---
 name: dev-siq-format
-description: Как SI Game читает .siq-паки — структура архива, опции XML-парсера, типы вопросов, построение страниц, раздача медиа
+description: Как SI Game читает .siq — архив, XML-парсер без числового приведения, SIQ 5 params и SIQ 4 scenario, страницы, медиа и Html, манифест files
 metadata:
   type: project
 ---
 
 ## Архив
 
-`.siq` — zip: `content.xml` + каталоги `Images/`, `Audio/`, `Video/` (+ `Texts/`). Имена файлов в архиве
-URI-кодированы. Разбор — `si-game-service/src/utils/parseSIQ.ts` (AdmZip, целиком в память, синхронно).
-Типы структуры `content.xml` — `SIQ` namespace в `src/serverTypes.ts`.
+zip: `content.xml` + `Images/`, `Audio/`, `Video/`, `Html/` (+ `Texts/`, `quality.marker`). Имена записей URI-кодированы
+(`Images/ac%20dc.jpg`). Разбор — `src/utils/parseSIQ.ts`: записи классифицируются по префиксу, без `content.xml` — понятная ошибка.
 
-## XML-парсер (fast-xml-parser 4)
+## XML (fast-xml-parser 4)
 
-`{ ignoreAttributes: false, attributesGroupName: 'attributes', attributeNamePrefix: '' }`:
-- атрибуты лежат в `node.attributes.*`, текст узла с атрибутами — в `node['#text']`;
-- элемент, встречающийся один раз, — **объект, а не массив**: везде нужен `Array.isArray(x) ? x : [x]`
-  (так сделано для rounds/themes/questions/params; в `parseAnswerGroup` — нет, аудит B11);
-- `parseTagValue` по умолчанию **true**: текст `007` → `7`, `0x10` → `16`, `1984` → number (аудит B10).
-  Атрибуты остаются строками.
+`ignoreAttributes:false, attributesGroupName:'attributes', attributeNamePrefix:'', parseTagValue:false` — тексты всегда строки
+(`007` остаётся `007`). Один элемент — объект, несколько — массив: нормализовать везде (`src/utils/siqValue.ts`).
 
-## Вопрос (`src/entity/Question.ts`)
+## Вопросы (`src/entity/Question.ts`)
 
-- **Поддерживается только формат SIQ 5** (`params`). `scenario`/`atom` из SIQ 4 не парсятся — такие вопросы
-  остаются без страниц (пустой экран, первый `next` закрывает вопрос).
-- Тип — атрибут `type`: `stake`, `secret`, `secretPublicPrice`, `secretNoQuestion`, `noRisk`; любое другое
-  значение (в т.ч. `bagcat`/`auction`/`sponsored` из enum в `serverTypes.ts`) → `default`.
-- Цена — атрибут `price`; `price < 0` → вопрос сразу помечается сыгранным.
-- `params.param` (формат SIQ 5): `theme` (переименовать тему), `question` (контент), `answer` (контент ответа),
-  `selectionMode` (`exceptCurrent`/`any`), `price` с `numberSet {minimum, maximum, step}` → `CostType`
-  (`accurate` / `between` / `step` / `minOrMaxInRound`), `type="group"` → ответ-группа (варианты).
-- Правильные/неправильные ответы — `right.answer` / `wrong.answer` (приводятся к строке).
-
-## Страницы (`PageBuilder`)
-
-- Каждый `item` контента = страница (текст / image / audio(voice) / video / html); `placement="replic"` — реплика
-  ведущего, страницу не создаёт; `waitForFinish` задан → элемент склеивается со следующим на одной странице.
-- После контента вопроса — страница-**маркер** (`isMarker`), затем контент `answer` или текст первого правильного
-  ответа. Без `params` у вопроса страниц нет — `next` сразу закрывает вопрос.
+- SIQ 5: `params.param` — `question`/`answer` (content items), `theme`, `selectionMode`, `price` (`numberSet` → `CostType`),
+  `type="group"` → варианты ответа (текст или `{'#text'}` картинка). Тип — атрибут `type`: stake/secret/secretPublicPrice/
+  secretNoQuestion/noRisk, прочее → default.
+- SIQ 4: `scenario.atom` без `params` — text/image/voice/video/html, `say` → реплика, `marker` делит вопрос/ответ, `@file` → имя
+  файла; `<type name="cat|bagcat">` → secret, `auction` → stake, `sponsored` → noRisk, параметры `theme`/`cost`.
+- Страницы (`PageBuilder`): каждый item — страница; `waitForFinish` склеивает со следующим; `placement="replic"` — реплика;
+  html с `isRef` → `htmlFile`. После вопроса первая страница ответа помечается `isMarker`; без контента ответа — текст первого
+  правильного ответа.
 
 ## Медиа
 
-- При старте игры ассеты пишутся в `packages/<gameId>/<Images|Audio|Video>/<декодированное имя>`
-  (`SiqPackage.saveAssets`, асинхронно, без await).
-- Фронт строит URL `/api/files/<gameId>/<Images|Audio|Video>/<имя из content.xml>`; абсолютные `http(s)://`
-  ссылки используются как есть. HTML-контент не рендерится.
+`SiqPackage.saveAssets(siq, packDir)` — безопасное декодирование имён, защита от zip slip (выход за packDir пропускается),
+пул записей с await, ошибки по файлу логируются. Игра переходит на Screensaver только после распаковки.
+URL на фронте: `/api/files/<gameId>/<Images|Audio|Video|Html>/<имя из content.xml>`.
+
+## Манифест `<files>` (SIQ 5)
+
+`<files><file name="Audio/3 doors.mp3" hash="…"/>` — SHA-256 содержимого в верхнем регистре hex, имена раскодированы
+(проверено на реальном паке 2026-09-18: 221/221 совпали, один файл был вне манифеста). Пока не используется — запланирована
+проверка целостности при загрузке. Атрибут пака `logo="@cover.jpg"` (обложка) тоже пока не показывается.

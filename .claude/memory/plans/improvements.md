@@ -1,60 +1,25 @@
 ---
 name: plans-improvements
-description: Бэклог улучшений по аудиту 2026-09-18 — ID S/B/C/A/F/D, приоритеты, статусы
+description: Бэклог SI Game — аудит 2026-09-18 закрыт полностью; открытые задачи — целостность паков, обложки, окно запуска, подпись
 metadata:
   type: project
 ---
 
-Источник: `docs/AUDIT-2026-09-18.md` (описание, file:line, варианты фикса). Здесь — только трекинг.
-При закрытии задачи менять статус и дату; при новых находках — дописывать в аудит или новый `docs/AUDIT-*.md`.
+## Аудит `docs/AUDIT-2026-09-18.md` — закрыт
 
-Статусы: `open` · `in progress` · `done (дата)` · `wontfix (причина)`.
+Все пункты S1–S7, B1–B22, C1–C6, A1–A9, F1–F8, D1 — `done` в ветке `fix/audit-2026-09-18` (коммиты `10597fa`, `e825f7b`, `44c69b1`).
+C1/C2/C6 (Docker-деплой) закрыты удалением деплоя по решению пользователя; C3 — переход на @yao-pkg/pkg + Node 24.
+Детали по пунктам — раздел «Статус» в самом аудите. Ревью исправлений: 7 ревьюеров + 3 скептика на находку (23 подтверждено и исправлено),
+ревью доработок и визуальный ревью вёрстки (20 подтверждено и исправлено).
 
-## P0 — безопасность (минуты работы)
+## Открытые задачи
 
-| ID | Задача | Статус |
+| Задача | Статус | Заметки |
 |---|---|---|
-| S1 | Удалить `GET /api/fatal` | open |
-| S2 | Санитизировать имя файла в upload (basename, `.siq`, внутри `siqDir`) | open |
-| S3 | Zip Slip в `SiqPackage.saveAssets` | open |
-| S4 | Проверять `file` в `selectPack` | open |
-
-## P1 — надёжность игры
-
-| ID | Задача | Статус |
-|---|---|---|
-| B1 | `saveAssets`: await + обработка ошибок, старт после распаковки | open |
-| B2 | Реконнект: re-handshake + re-selectGame на клиенте, ack всегда, таймауты | open |
-| B3 | `preValidate` — `throw` и разумный таймаут | open |
-| B4 | `getGame` отвечает при отсутствии игры | open |
-| B9 | QR в консоли → `/` | open |
-| B10 | `parseTagValue: false` в XML-парсере | open |
-| B5, B6 | Экран Results: восстановление при reload + подписка в админке | open |
-
-## P2 — CI и сборка
-
-| ID | Задача | Статус |
-|---|---|---|
-| C1 | Один workflow вместо двух одинаковых | open |
-| C5 | Job `check` (tsc ×2, lint) перед deploy | open |
-| S6 | Убрать `--inspect` из прод-команд | open |
-| C3 | Уйти с `pkg@5.8.1`/node16 (`@yao-pkg/pkg` или Node SEA) | open |
-| C4 | Удалить устаревшие per-app Dockerfile/docker-compose | open |
-| C2, C6 | cleanup через `repository_owner` + `needs`; prod-deps в образе | open |
-
-## P3 — рефакторинг
-
-| ID | Задача | Статус |
-|---|---|---|
-| A1 | Enum'ы в `common/data.ts` вместо двух `src/data.ts` | open |
-| A2 | Одна реализация страниц admin/player вместо пар `*.tsx` + `*/[id].tsx` | open |
-| A3, A4 | Обёртка обработчиков Controller + zod-валидация payload'ов | open |
-| A7 | Тесты: фикстура `.siq` + state machine `Game.next()` | open |
-| A8 | Починить lint сервиса | open |
-| A9 | Store игры на zustand вместо `useState` + мутаций | open |
-| F1 | Единый `apiUrl()` для REST/медиа | open |
-| F2 | Импорты `antd` / `@ant-design/icons` вместо `/lib` | open |
-
-## P4 — по мере касания кода
-
-B7, B8, B11–B22, S5, S7, F3–F8, A5, A6, D1 — см. аудит.
+| Целостность пака по `<files>` (SHA-256), статус в списке паков | open | Семантика хеша проверена на реальном паке, см. [[dev-siq-format]] |
+| Обложка пака (`logo`) на заставке и миниатюры в списке паков | open | `GET /api/packs/logo?file=` |
+| Нативное окно запуска (Tauri 2) | planned | `docs/LAUNCHER-PLAN.md`, превью `docs/launcher-preview.html`; 3 открытых вопроса к пользователю |
+| Метаданные exe (имя «SI Game» в запросе брандмауэра) | open | Патчить базовый node-бинарник до pkg, иначе ломается payload |
+| Подпись Apple Developer ID / Windows | by user decision | Без неё Gatekeeper и SmartScreen при первом запуске |
+| Имя игры по умолчанию на сервере «Default» | low | Фронт показывает «Без названия» |
+| Стенд визуальной проверки (headless Chrome + детектор) в репо | idea | Сейчас не сохранён; был в scratchpad сессии 2026-09-19 |

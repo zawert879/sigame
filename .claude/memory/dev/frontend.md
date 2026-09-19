@@ -1,58 +1,51 @@
 ---
 name: dev-frontend
-description: Устройство si-game-admin-2 — static export + SPA-fallback, дубли страниц, client-синглтон, клавиши-кнопки, синхронизация медиа, UI-конвенции
+description: Устройство si-game-admin-2 — static export, клиент и реконнект, zustand-стор, вёрстка ТВ и пульта через FitText, кнопки-клавиши, медиа
 metadata:
   type: project
 ---
 
-## Сборка и маршрутизация
+## Сборка и маршруты
 
-- Next.js 14, **pages router**, `output: 'export'` → чистая статика в `out/`, которую раздаёт Koa-сервер.
-  Серверного Next в проде нет (SSR, API routes, middleware, rewrites недоступны).
-- Динамические маршруты не пререндерятся (`getStaticPaths` → `paths: []`). В проде `/admin/<id>` и
-  `/player/<id>` обслуживает SPA-fallback Koa → `admin.html` / `player.html`, а id достаётся из
-  `window.location.pathname` (`utils/route.ts`).
-- Поэтому страницы **продублированы**: `pages/admin.tsx` (прод) ≈ `pages/admin/[id].tsx` (только `next dev`),
-  то же для `player`. Любую правку делать в обеих копиях (аудит A2).
-- `pages/index.tsx` — запрашивает список игр и редиректит на `/player/<первая игра>`.
-- `/test`, `/test2`, `/test3` — песочницы, попадают в прод-сборку.
+- Next 14.2 pages router, `output: 'export'` → `out/`, раздаёт Koa. `next.config.js`: `experimental.externalDir` (common/ вне
+  приложения) и server-only webpack externals для `rc-*`/`@ant-design/*` `/es/` (иначе пререндер падает после ESM-импортов antd).
+  `resolutions.classnames` в package.json — одна копия classnames для `next dev`.
+- Страницы — тонкие обёртки без `getStaticProps`: `useRouteGameId('admin'|'player')` + `components/screens/AdminScreen|PlayerScreen`.
+  `/`, `/admin/`, `/player/` → `FirstGameRedirect` на первую игру. Навигация между играми — полная перезагрузка страницы.
+- `scripts/build.js` собирает фронт с `NEXT_PUBLIC_SERVER_URL=''` (dev-адрес из `.env*` не попадает в релиз).
 
 ## Клиент и состояние
 
-- `src/client/index.ts` — **синглтон** `client` поверх одного `Manager` socket.io (`serverUrl` из
-  `NEXT_PUBLIC_SERVER_URL` или `window.location.origin`). `_app.tsx` один раз шлёт `handshake`.
-- Каждая страница: `fetchGames()` → `client.getGame(id)` + `client.selectGame(id)` → раскладывает `screenData`
-  по десятку `useState`; затем подписки `client.socket.socketIo.on(Event.On*)` в `useEffect`.
-- `onUpdatePlayers` приходит дельтой (`added`/`removed`/`updated`) и сливается со списком вручную — в четырёх местах
-  (admin, player, `GameInit`, `PlayerSettingsModal`), с мутацией объектов на месте.
-- zustand используется только для списка паков (`store/packs.ts`).
-- REST и медиа — по **относительным** URL (`/api/packs`, `/api/upload`, `/api/files/<gameId>/<Images|Audio|Video>/<name>`),
-  сокет — по `serverUrl`.
+- `src/client/` — синглтон `client`: `socket.timeout(ms).emitWithAck`, `AckError` → `RequestError` с русским текстом,
+  после реконнекта сам повторяет `selectGame` и уведомляет подписчиков. Баннер «Нет соединения…» — `ConnectionBanner`.
+- `src/config.ts` — `serverUrl` (нормализует адрес без протокола), admin-токен из `?token=` → localStorage `sigame.adminToken` →
+  socket auth и заголовок `x-admin-token`. URL REST и медиа — только через `utils/api.ts` (`apiUrl`, `mediaUrl`, `authHeaders`).
+- `store/game.ts` (zustand) — единственный источник состояния экрана; `store/players.ts` — слияние дельт onUpdatePlayers.
+  `hooks/useGameConnection.ts` — selectGame + getGame, пуши применяются строго по порядку (1 с анимации выбора вопроса на ТВ),
+  снимок перезагружается после реконнекта, громкость из onUpdateSettings.
 
-## Кнопки игроков (клавиатура)
+## Вёрстка
 
-- `KeyPressProvider` (`hooks/useKeyPress.tsx`) в `_app` вешает глобальный `keydown` на **каждой** странице и шлёт
-  `client.keyPress(e.key, e.code)`; сервер матчит по `code`.
-- Чтобы ввод текста не жал «кнопки», поля ввода берутся из `components/override/` (`Input`, `InputNumber`,
-  `InputSearch`) — они выключают провайдер на focus и включают на blur. **Не использовать antd-инпуты напрямую.**
-- Назначение клавиши игроку — `onKeyDown` в `initial/PlayerList.tsx` сохраняет `e.code`.
+- `components/FitText.tsx`: `FitText` — максимальный шрифт, влезающий в блок (сначала перенос по словам, внутри слов — только
+  если заметно крупнее; ниже `min` — прокрутка); `useUniformFit(ref, selector)` — общий размер для группы (цены табло, варианты).
+- ТВ: `PlayerScreen` — `fixed inset-0` flex-колонка: `PlayerPanel` (clamp по высоте, до 8 игроков) → `player/QuestionScore`
+  (полосу не менять — решение пользователя) → `main` (flex-1, overflow-hidden), экраны `h-full`. Табло — CSS grid на все строки/
+  столбцы без прокрутки (до 12×12). Вопрос: `question/Page.tsx` раскладывает текст/картинку/видео/аудио (`AudioVisual`, `VideoVisual`),
+  варианты — `AnswerOptions`, реплика — подпись снизу. Итоги — пьедестал + ряды карточек. QR — тёмный на белом.
+- Пульт: адаптивная страница, sticky-шапка (меню, `screenTitle` из `utils/screens.ts`, прогресс, «Далее»); ≥1024px — контент
+  слева, справа таблица игроков и цена; телефон — всё в столбик с прокруткой, компактные строки игроков (`AdminTable`),
+  табло с горизонтальной прокруткой и липкой колонкой тем. Отладочный JSON-квадрат убран.
+- Тексты UI русские; «Default» показывается как «Без названия»; склонения очков — `utils/utils.ts`.
+
+## Клавиши-кнопки
+
+`hooks/useKeyPress.tsx` шлёт `keyPress(e.key, e.code)` на любой странице, игнорируя поля ввода, автоповтор и шорткаты с
+модификаторами (одиночные Ctrl/Alt/Cmd — кнопки). Хранится `code`, показывается `keyLabel` (`utils/keys.ts`).
 
 ## Медиа
 
-- Актуальный плеер — `components/MediaPlayer.tsx` (react-player + media-chrome). Тип `Admin` — с контролами;
-  play/pause/seek шлют `client.updateMediaPlayer({time, isPlaying})` → сервер → `onUpdateMediaPlayer` всем.
-- Страница игрока пробрасывает `onUpdateMediaPlayer` в локальный `eventEmitter` (`src/eventEmitter.ts`), на который
-  подписан `MediaPlayer` типа `Player`. Админка событие только логирует.
-- `QuestionVideo`/`QuestionAudio`/`QuestionMediaPlayer` — старая реализация, не используется.
-- Звуки игры (`public/MUSIC/*.mp3`) — `hooks/useSound.tsx` (`use-sound`).
+`components/MediaPlayer.tsx` (react-player + media-chrome): на пульте управление шлёт updateMediaPlayer, ТВ синхронизируется
+через `src/eventEmitter.ts`; громкости применяются сразу. HTML-контент — `question/HtmlContent.tsx` в `sandbox=""` iframe
+(`htmlFile` → `/api/files/<id>/Html/<name>`). Кнопка «На весь экран» на ТВ — Fullscreen API.
 
-## UI-конвенции
-
-- antd 5 импортируется из `antd/lib` и `@ant-design/icons/lib` (так по всему коду; раздувает бандл — аудит F2).
-- Tailwind 3 + antd одновременно (`postcss-antd-fixes`); кастомные анимации/цвета — `tailwind.config.ts`;
-  шрифт Futura Condensed — `src/styles/fonts`.
-- Тексты UI на русском, локализация типов вопросов — `src/dictionary.ts`.
-- Экраны 1:1 соответствуют `Screen` из `data.ts`; админские версии — `components/admin/`, игровые —
-  `components/player/`, общие — `components/`.
-
-Сервер и протокол — [[dev-architecture]].
+Сервер — [[dev-architecture]].

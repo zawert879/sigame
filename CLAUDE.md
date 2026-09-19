@@ -90,9 +90,10 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
   Рантайм-импорты `common/data` — только относительным путём; `@common/types` — только `import type`.
   Во фронтенде `next.config.js` включает `experimental.externalDir` (common вне приложения) и server-only
   webpack externals для `rc-*`/`@ant-design/*` `/es/` (иначе падает пререндер после ESM-импортов antd).
-- **Static export + SPA-fallback.** `[id]`-маршруты не пререндерятся; Koa отдаёт `/admin/<id>` → `admin.html`,
-  `/player/<id>` → `player.html`. Страницы — тонкие обёртки: id берёт `utils/route.ts`, тело —
-  `components/screens/AdminScreen.tsx` / `PlayerScreen.tsx`.
+- **Static export + SPA-fallback.** Koa отдаёт `/admin/<id>` → `admin.html`, `/player/<id>` → `player.html`
+  (путь с расширением или `/_next/*` без файла → 404). Страницы — тонкие обёртки без `getStaticProps`: id берёт
+  `useRouteGameId` (`utils/route.ts`), тело — `components/screens/AdminScreen.tsx` / `PlayerScreen.tsx`.
+  `/`, `/admin/`, `/player/` без id редиректят на первую игру (`FirstGameRedirect`).
 - **Протокол.** Без handshake. Клиент (`si-game-admin-2/src/client/`, синглтон `client`) шлёт `selectGame(id)`,
   запросы — `socket.timeout(ms).emitWithAck`; после реконнекта сам повторяет `selectGame`. Сервер создаёт
   `Controller` на соединение; **каждый** запрос получает ack — ответ или `AckError {error: AckErrorCode}`.
@@ -108,6 +109,12 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
 - **Фронтенд-состояние.** Один zustand-store `store/game.ts` на экран; `hooks/useGameConnection.ts` делает
   `selectGame` + `getGame`, применяет пуши строго по порядку и перезагружает снимок после реконнекта.
   Дельты `onUpdatePlayers` сливает только `store/players.ts`.
+- **Вёрстка.** Любой текст из пака или имени игрока выводится через `components/FitText.tsx` (подбирает шрифт под блок,
+  ниже минимума — прокрутка); группы одинакового текста (цены табло, варианты ответа) — `useUniformFit`. ТВ: `PlayerScreen` —
+  `fixed inset-0` flex-колонка (панель игроков → полоса цены → `main` на всю остаток), экраны `h-full`, никаких `vh`-высот
+  внутри. Пульт: адаптивная страница со sticky-шапкой (меню, название экрана по-русски из `utils/screens.ts`, прогресс,
+  «Далее»); на телефоне — вертикальная прокрутка, таблица игроков всегда доступна. Полосу цены на ТВ
+  (`player/QuestionScore.tsx`) не менять — пользователь доволен её размером.
 - **Паки.** `.siq` в `SIQ_DIR`; при старте пака медиа распаковываются в `PACKAGES_DIR/run-<pid>-<uuid>/<gameId>/`
   (чистятся только каталоги завершённых запусков) и раздаются как `/api/files/<gameId>/<Images|Audio|Video>/<name>`
   с поддержкой HTTP Range (URL строит `utils/api.ts` `mediaUrl`). Поддерживаются SIQ 5
@@ -125,7 +132,11 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
 
 - Поля ввода в UI — из `components/override/` (`Input`, `InputNumber`): глобальный `keydown` (`hooks/useKeyPress.tsx`)
   шлёт нажатия как кнопки игроков (одиночные Ctrl/Alt/Cmd тоже кнопки); поля ввода, автоповтор и сочетания-шорткаты он игнорирует.
+  Клавиши хранятся как `KeyboardEvent.code`, показываются через `keyLabel` (`utils/keys.ts`).
+- Правильный ответ (`winPlayer`) сбрасывает очередь нажавших и выключает кнопки; «Повторить вопрос» включает снова.
 - `selectPack` отвечает только после распаковки медиа — у клиента для него таймаут 180 с.
 - XML-парсер работает с `parseTagValue: false`: тексты пака всегда строки.
-- Jest-тесты сервиса собирают `.siq`-фикстуры на лету (`test/helpers`); конфиг читается при импорте, поэтому env
+- Jest-тесты сервиса (328) собирают `.siq`-фикстуры на лету (`test/helpers`); конфиг читается при импорте, поэтому env
   выставляется до `require` модулей приложения.
+- Порт: сервер проверяет его до `listen` (`src/portGuard.ts`); если `PORT` не задан и 4000 занят — `/api/health` чужого
+  процесса, затем 4001–4010, затем любой свободный. Баннер печатает реальный порт и две ссылки: для ТВ и для ведущего.

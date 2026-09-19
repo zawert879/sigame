@@ -17,12 +17,12 @@ metadata:
 | `si-game-service/` | Node / TypeScript / Koa 2 / socket.io 4 / Jest | Игровой сервер: состояние игр в памяти, парсинг .siq, REST для паков, socket-протокол |
 | `si-game-admin-2/` | Next.js 14 (pages router, `output: 'export'`) / React 18 / antd 5 / Tailwind 3 / zustand | Весь UI: экран игроков, пульт ведущего |
 | `common/types.ts` | TS-типы | Общий контракт socket-протокола (Request*/Response*/Event*/Payload*), см. [[dev-architecture]] |
-| `scripts/` | Node | `build.js` (сборка обоих + копирование статики), `package-win.js` (exe через pkg) |
+| `scripts/` | Node | `build.js` (сборка обоих + копирование статики), `package.js` (exe и mac-бинарники через @yao-pkg/pkg), `smoke.js` |
 
 ## Сценарий и устройства
 
-1. Ведущий запускает сервер (`sigame.exe` на Windows или Docker). В консоль печатается LAN-адрес и QR на
-   `/player/<id Default-игры>` (игра `Default` создаётся при старте).
+1. Ведущий запускает приложение (`sigame.exe` или `sigame-macos-*`). В консоль печатаются ссылка и QR для ТВ
+   (`http://<ip>:<port>/` → первая игра) и ссылка для ведущего (`/admin/`, с `?token=` при `ADMIN_TOKEN`).
 2. **Экран игроков** (`/player/<id>`, ТВ/проектор): на экране `Initial` показывает QR на `/admin/<id>`.
    К этому же устройству подключаются «кнопки» игроков — любые клавиши клавиатуры (глобальный `keydown` → `keyPress`).
 3. **Пульт ведущего** (`/admin/<id>`, телефон/планшет): игроки (имя + назначение клавиши по `KeyboardEvent.code`),
@@ -33,12 +33,10 @@ metadata:
 
 ## Порты и каталоги
 
-- Сервер: **4000** (захардкожен в `src/index.ts` и `src/startupBanner.ts`). `next dev` — 3000.
-- Рантайм-каталоги относительно **cwd процесса** (`src/data.ts`): `siq/` — загруженные паки (переживают рестарт),
-  `packages/<gameId>/{Images,Audio,Video}` — распакованные медиа игры (чистятся при старте и при закрытии игры).
-  Оба в `.gitignore`.
-- Статика фронтенда: `dist/public` рядом со сборкой или `FRONTEND_STATIC_DIR`.
-- Состояние игр — только в памяти процесса; рестарт = потеря всех игр.
+- Сервер: `PORT`, по умолчанию 4000 с запасными 4001–4010 (см. [[dev-architecture]]). `next dev` — 3000.
+- Данные: из исходников — `siq/` и `packages/` в cwd; упакованный бинарник — `siq/` рядом с исполняемым файлом, если есть,
+  иначе `~/Library/Application Support/SIGame` / `%LOCALAPPDATA%\SIGame`. Переопределяются `SIQ_DIR`/`PACKAGES_DIR`.
+- Медиа игры распаковываются в `PACKAGES_DIR/run-<pid>-<uuid>/<gameId>/`; состояние игр — только в памяти процесса.
 
 ## Режимы поставки
 
