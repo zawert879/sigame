@@ -12,6 +12,7 @@ import { QuestionAdmin } from "@/components/admin/QuestionAdmin"
 import { HostActions } from "@/components/admin/HostActions"
 import { Results } from "@/components/Results"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
+import { SoundUnlock } from "@/components/SoundUnlock"
 import { GameStatusView } from "./GameStatusView"
 import { FirstGameRedirect } from "./FirstGameRedirect"
 import { useGameConnection } from "@/hooks/useGameConnection"
@@ -68,6 +69,7 @@ export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> 
   return (
     <>
       <ConnectionBanner />
+      <SoundUnlock />
       <div className="flex min-h-dvh flex-col bg-slate-200 font-sans lg:h-dvh lg:min-h-[36rem]">
         <Menu refresh={refresh} />
         <div className="flex flex-1 flex-col gap-2 p-2 sm:gap-3 sm:p-3 lg:min-h-0 lg:flex-row">

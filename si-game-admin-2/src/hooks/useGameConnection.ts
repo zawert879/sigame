@@ -90,7 +90,10 @@ export const useGameConnection = (gameId: string | undefined, role: GameRole) =>
         if (seq !== loadSeq) {
           return
         }
-        enqueue(() => store().applySnapshot(game))
+        enqueue(() => {
+          store().applySnapshot(game)
+          eventEmitter.emit('updateMediaPlayer', game.media)
+        })
         void loadSettings()
       } catch (error) {
         if (!active || seq !== loadSeq) {
@@ -152,11 +155,7 @@ export const useGameConnection = (gameId: string | undefined, role: GameRole) =>
       client.on<EventUpdatePlayers>(Event.OnUpdatePlayers, data => enqueue(() => store().updatePlayers(data))),
       client.on<EventUpdateScoreValue>(Event.OnUpdateScoreValue, data => enqueue(() => store().updateScoreValue(data.scoreValue))),
       client.on<ResponseGetSettings>(Event.OnUpdateSettings, applySettings),
-      client.on<EventUpdateMediaPlayer>(Event.OnUpdateMediaPlayer, data => {
-        if (role === 'player') {
-          enqueue(() => updateMedia(data))
-        }
-      }),
+      client.on<EventUpdateMediaPlayer>(Event.OnUpdateMediaPlayer, data => enqueue(() => updateMedia(data))),
       client.on(Event.OnExit, () => {
         active = false
         void openNextGame(role, gameId)

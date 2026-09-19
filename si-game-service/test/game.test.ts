@@ -170,7 +170,7 @@ describe('Game: screens', () => {
     expect(game.package?.currentQuestion).toBe(q100)
     expect(game.score.value).toBe(100)
     expect(game.isButtonsActive).toBe(true)
-    expect(recorder.names()).toEqual([GameEvent.UpdateScoreValue, GameEvent.StartQuestion])
+    expect(recorder.names()).toEqual([GameEvent.UpdateScoreValue, GameEvent.StartQuestion, GameEvent.UpdateMediaPlayer])
 
     recorder.clear()
     game.next()
@@ -178,7 +178,8 @@ describe('Game: screens', () => {
     game.next()
     expect(q100.pageIndex).toBe(2)
     expect(q100.currentPage?.isMarker).toBe(true)
-    expect(recorder.names()).toEqual([GameEvent.UpdatePage, GameEvent.UpdatePage])
+    expect(recorder.names()).toEqual([GameEvent.UpdatePage, GameEvent.UpdateMediaPlayer, GameEvent.UpdatePage, GameEvent.UpdateMediaPlayer])
+    expect(recorder.of(GameEvent.UpdateMediaPlayer)).toEqual([[{ time: 0, isPlaying: true }], [{ time: 0, isPlaying: true }]])
 
     recorder.clear()
     game.next()
@@ -207,7 +208,7 @@ describe('Game: screens', () => {
     game.next()
     expect(game.screen).toBe(Screen.Question)
     expect(game.isButtonsActive).toBe(false)
-    expect(recorder.names()).toEqual([GameEvent.StartQuestion])
+    expect(recorder.names()).toEqual([GameEvent.StartQuestion, GameEvent.UpdateMediaPlayer])
 
     game.next()
     game.next()
@@ -332,7 +333,9 @@ describe('Game: screens', () => {
 
     recorder.clear()
     game.next()
-    game.nextRound()
+    expect(() => {
+      game.nextRound()
+    }).toThrow(new GameError('Это последний раунд'))
     expect(game.screen).toBe(Screen.Results)
     expect(recorder.events).toEqual([])
   })
@@ -363,16 +366,34 @@ describe('Game: screens', () => {
     expect(recorder.names()).toEqual([GameEvent.StartRoundName])
 
     recorder.clear()
-    game.nextRound()
+    expect(() => {
+      game.nextRound()
+    }).toThrow(new GameError('Это последний раунд'))
+    expect(game.package?.roundIndex).toBe(1)
     expect(recorder.events).toEqual([])
 
     game.previousRound()
     expect(game.package?.roundIndex).toBe(0)
-    game.previousRound()
-    expect(game.package?.roundIndex).toBe(0)
     expect(game.screen).toBe(Screen.RoundName)
 
+    recorder.clear()
+    expect(() => {
+      game.previousRound()
+    }).toThrow(new GameError('Это первый раунд'))
+    expect(game.package?.roundIndex).toBe(0)
+    expect(recorder.events).toEqual([])
+
     expect(question(game, 100).isAvailable).toBe(true)
+  })
+
+  test('nextRound / previousRound without a pack throw a GameError', () => {
+    const game = newGame()
+    expect(() => {
+      game.nextRound()
+    }).toThrow(new GameError('Пак не выбран'))
+    expect(() => {
+      game.previousRound()
+    }).toThrow(new GameError('Пак не выбран'))
   })
 
   test('progress counts the played questions of the current round (a negative price counts as played)', async () => {
@@ -406,7 +427,7 @@ describe('Game: question controls', () => {
     expect(game.queuePlayersIds).toEqual([])
     expect(game.isButtonsActive).toBe(true)
     expect(recorder.of(GameEvent.UpdateMediaPlayer)).toEqual([[{ time: 0, isPlaying: true }]])
-    expect(recorder.names()).toEqual([GameEvent.UpdateMediaPlayer, GameEvent.UpdatePage])
+    expect(recorder.names()).toEqual([GameEvent.UpdatePage, GameEvent.UpdateMediaPlayer])
   })
 
   test('repeatQuestion keeps the buttons off for a special question', async () => {
@@ -580,11 +601,13 @@ describe('Game: players', () => {
     expect(game.screen).toBe(Screen.Question)
     expect(q500.pages?.map(item => item.isMarker)).toEqual([false, false, false, true, false])
 
+    game.mediaPlayer.update(7, false)
     const recorder = record(game)
     game.winPlayer(vasya.id)
     expect(q500.pageIndex).toBe(3)
     expect(q500.currentPage).toEqual(expect.objectContaining({ isMarker: true, text: 'Ответ текстом' }))
     expect(recorder.of(GameEvent.UpdatePage)).toHaveLength(1)
+    expect(recorder.of(GameEvent.UpdateMediaPlayer)).toEqual([[{ time: 0, isPlaying: true }]])
 
     game.next()
     expect(q500.currentPage).toEqual(expect.objectContaining({ image: 'answer.png' }))
@@ -891,6 +914,7 @@ describe('Game: snapshots', () => {
     game.setScoreBig(200)
     game.setScoreLittle(50)
     game.setVolumeSettings(30, 100)
+    game.mediaPlayer.update(3, false)
 
     expect(game.getSnapshot()).toEqual({
       gameId: game.id,
@@ -902,8 +926,22 @@ describe('Game: snapshots', () => {
       scoreLittle: 50,
       progress: game.progress,
       screenData: game.getScreenData(),
+      media: { time: 3, isPlaying: false },
     })
     expect(game.getSettings()).toEqual({ scoreValue: 0, big: 200, little: 50, adminVolume: 100, playerVolume: 30 })
+  })
+
+  test('the snapshot carries the media state so a reloaded screen resumes where the host left it', async () => {
+    const game = await tableGame()
+    game.selectQuestion(question(game, 100).id)
+    game.mediaPlayer.update(12.5, false)
+    expect(game.getSnapshot().media).toEqual({ time: 12.5, isPlaying: false })
+
+    game.next()
+    const { media } = game.getSnapshot()
+    expect(media.isPlaying).toBe(true)
+    expect(media.time).toBeGreaterThanOrEqual(0)
+    expect(media.time).toBeLessThan(1)
   })
 
   test('setScoreLittle, setScoreBig and setVolumeSettings change the settings and emit UpdateSettings each time', () => {

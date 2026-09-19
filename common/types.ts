@@ -268,6 +268,7 @@ export type ResponseGetGame = {
     screen: Screen.Initial;
     payload: PayloadInitial;
   };
+  media: EventUpdateMediaPlayer;
 }
 
 export type GameProgress = {

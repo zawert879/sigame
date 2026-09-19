@@ -60,6 +60,23 @@ describe('MediaPlayer', () => {
     expect(events).toEqual([[GameEvent.UpdateMediaPlayer, { time: 0, isPlaying: true }]])
   })
 
+  test('state moves the position forward while playing and holds it while paused', () => {
+    const { eventEmitter } = container()
+    let now = 1000
+    const player = new MediaPlayer(eventEmitter, () => now)
+    player.update(10, true)
+    now += 2500
+    expect(player.state).toEqual({ time: 12.5, isPlaying: true })
+
+    player.update(4, false)
+    now += 60000
+    expect(player.state).toEqual({ time: 4, isPlaying: false })
+
+    player.reset(true)
+    now += 1500
+    expect(player.state).toEqual({ time: 1.5, isPlaying: true })
+  })
+
   test('update and the setters emit the whole state', () => {
     const { eventEmitter, events } = container()
     const player = new MediaPlayer(eventEmitter)

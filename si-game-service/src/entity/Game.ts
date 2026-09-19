@@ -281,8 +281,9 @@ export class Game {
   }
 
   public nextRound(): void {
-    if (!this._package?.nextRound()) {
-      return
+    const siqPackage = this.requirePackage()
+    if (!siqPackage.nextRound()) {
+      throw new GameError('Это последний раунд')
     }
 
     this.leaveQuestion()
@@ -290,12 +291,13 @@ export class Game {
   }
 
   public previousRound(): void {
-    if (!this._package) {
-      return
+    const siqPackage = this.requirePackage()
+    if (siqPackage.roundIndex === 0) {
+      throw new GameError('Это первый раунд')
     }
 
     this.leaveQuestion()
-    this._package.previousRound()
+    siqPackage.previousRound()
     this.setScreen(Screen.RoundName)
   }
 
@@ -342,8 +344,7 @@ export class Game {
     question.restart()
     this._queuePlayers.clear()
     this._isButtonsActive = this.isButtonsQuestion(question)
-    this._mediaPlayer.reset(true)
-    this._eventEmitter.emit(GameEvent.UpdatePage)
+    this.updatePage()
   }
 
   public cancelQuestion(): void {
@@ -441,7 +442,7 @@ export class Game {
     this._isButtonsActive = false
     this._queuePlayers.clear()
     if (this._package?.currentQuestion?.goToAnswer()) {
-      this._eventEmitter.emit(GameEvent.UpdatePage)
+      this.updatePage()
     }
   }
 
@@ -475,6 +476,7 @@ export class Game {
       scoreLittle: this._score.little,
       progress: this.progress,
       screenData: this.getScreenData(),
+      media: this._mediaPlayer.state,
     }
   }
 
@@ -652,9 +654,9 @@ export class Game {
     question.restart()
     this._queuePlayers.clear()
     this._score.setValue(question.price)
-    this._mediaPlayer.reset()
     this._isButtonsActive = true
     this.setScreen(Screen.Question)
+    this._mediaPlayer.reset(true)
   }
 
   private prepareQuestion(question: Question) {
@@ -671,8 +673,8 @@ export class Game {
       return
     }
 
-    this._mediaPlayer.reset()
     this.setScreen(Screen.Question)
+    this._mediaPlayer.reset(true)
   }
 
   private nextQuestionPage() {
@@ -683,13 +685,26 @@ export class Game {
     }
 
     if (question.goToNextPage()) {
-      this._eventEmitter.emit(GameEvent.UpdatePage)
+      this.updatePage()
       return
     }
 
     question.markPlayed()
     this.leaveQuestion()
     this.showTableOrResults()
+  }
+
+  private updatePage() {
+    this._eventEmitter.emit(GameEvent.UpdatePage)
+    this._mediaPlayer.reset(true)
+  }
+
+  private requirePackage(): SiqPackage {
+    if (!this._package) {
+      throw new GameError('Пак не выбран')
+    }
+
+    return this._package
   }
 
   private leaveQuestion() {

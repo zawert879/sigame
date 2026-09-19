@@ -5,7 +5,7 @@ import { client } from "@/client";
 import { InputNumber } from "../override/InputNumber";
 import { FitText } from "../FitText";
 import { useGameStore, type PlayerView } from "@/store/game";
-import { Screen } from "@/data";
+import { QuestionType, Screen } from "@/data";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { useElementWidth } from "@/hooks/useElementWidth";
 import { notifyError } from "@/utils/notify";
@@ -16,11 +16,11 @@ const COMPACT_COLUMNS = "2.5rem minmax(0,1fr) 2.5rem 2.5rem 5.75rem";
 
 type RowMark = "selector" | "first" | "queued" | "idle"
 
-const rowMark = (player: PlayerView, showQueue: boolean): RowMark => {
-  if (showQueue && player.queue !== null) {
+const rowMark = (player: PlayerView, showSelector: boolean): RowMark => {
+  if (player.queue !== null) {
     return player.queue === 0 ? "first" : "queued"
   }
-  return player.isCurrent ? "selector" : "idle"
+  return showSelector && player.isCurrent ? "selector" : "idle"
 }
 
 const ROW_HIGHLIGHT: Record<RowMark, string> = {
@@ -94,7 +94,7 @@ const QueueMark: React.FC<{ player: PlayerView, mark: RowMark, onSelect: () => v
   )
 }
 
-const PlayerRow: React.FC<{ player: PlayerView, columns: string, wide: boolean, showCounters: boolean, showQueue: boolean }> = ({ player, columns, wide, showCounters, showQueue }) => {
+const PlayerRow: React.FC<{ player: PlayerView, columns: string, wide: boolean, showCounters: boolean, showSelector: boolean }> = ({ player, columns, wide, showCounters, showSelector }) => {
   const onSelect = useCallback(() => {
     void run('Не удалось выбрать игрока', () => client.selectPlayer(player.id))
   }, [player.id])
@@ -111,7 +111,7 @@ const PlayerRow: React.FC<{ player: PlayerView, columns: string, wide: boolean, 
   const onLoseCount = useCallback((value: number) =>
     run('Не удалось изменить число неверных ответов', () => client.setLosePlayer(player.id, value)), [player.id])
 
-  const mark = rowMark(player, showQueue)
+  const mark = rowMark(player, showSelector)
 
   return (
     <div role="row" className={`grid items-center gap-x-1.5 gap-y-1.5 rounded-lg px-1 py-1.5 ${ROW_HIGHLIGHT[mark]}`} style={{ gridTemplateColumns: columns }}>
@@ -179,8 +179,7 @@ export const PlayerTable: React.FC<{ players: PlayerView[], className?: string }
   const [showCounters, setShowCounters] = useState(false)
   const toggleCounters = useCallback(() => setShowCounters(value => !value), [])
   const columns = wide ? WIDE_COLUMNS : COMPACT_COLUMNS
-  const answerShown = useGameStore(state => state.screen === Screen.Question && !!state.questionPage?.currentPage?.isMarker)
-  const showQueue = !(answerShown && players.some(player => player.isCurrent && player.queue !== null))
+  const showSelector = useGameStore(state => state.screen !== Screen.Question || (!!state.question && state.question.type !== QuestionType.DEFAULT))
 
   return (
     <section ref={ref} aria-label="Игроки" className={`rounded-xl bg-white shadow-sm ${className ?? ""}`}>
@@ -206,7 +205,7 @@ export const PlayerTable: React.FC<{ players: PlayerView[], className?: string }
               {wide && <span role="columnheader" className="pl-1">Неверных</span>}
             </div>
             {players.map(player => (
-              <PlayerRow key={player.id} player={player} columns={columns} wide={wide} showCounters={showCounters} showQueue={showQueue} />
+              <PlayerRow key={player.id} player={player} columns={columns} wide={wide} showCounters={showCounters} showSelector={showSelector} />
             ))}
           </div>
         )}

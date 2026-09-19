@@ -16,6 +16,7 @@ import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { GameStatusView } from "./GameStatusView"
 import { FirstGameRedirect } from "./FirstGameRedirect"
 import { FullscreenButton, FullscreenCornerButton } from "@/components/FullscreenButton"
+import { SoundUnlock } from "@/components/SoundUnlock"
 import { SoundType, useSound } from "@/hooks/useSound"
 import { useGameConnection } from "@/hooks/useGameConnection"
 import { useGameStore } from "@/store/game"
@@ -127,6 +128,7 @@ export const PlayerScreen: FC<{ gameId: string | undefined, resolved: boolean }>
   return (
     <>
       <ConnectionBanner />
+      <SoundUnlock hint={screen !== Data.Screen.Initial} />
       {screen === Data.Screen.Initial && <InitialScreen adminPath={adminPath} />}
       {screen !== Data.Screen.Initial &&
         <div className="fixed inset-0 overflow-hidden bg-blue-700 flex flex-col">

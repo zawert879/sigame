@@ -12,6 +12,11 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(function Se
   const [view, setView] = useState<'menu' | 'points' | 'players' | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const screen = useGameStore(state => state.screen)
+  const roundIndex = useGameStore(state => state.progress?.roundIndex ?? 0)
+  const roundsCount = useGameStore(state => state.progress?.roundsCount ?? 0)
+  const hasPreviousRound = roundsCount > 0 && roundIndex > 0
+  const hasNextRound = roundIndex < roundsCount - 1
+  const roundCaption = roundsCount > 0 ? `Раунд ${roundIndex + 1} из ${roundsCount}` : "Пак не выбран"
   const canRepeat = screen === Screen.Question
   const canCancel = screen === Screen.Question || screen === Screen.QuestionPreparation
 
@@ -58,8 +63,6 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(function Se
     () => runAction('repeatQuestion', 'Не удалось повторить вопрос', async () => {
       await client.repeatQuestion()
       useGameStore.getState().restartQuestionMedia()
-      client.updateMediaPlayer({ time: 0, isPlaying: false })
-        .catch(error => notifyError(error, 'Не удалось синхронизировать плеер'))
     }),
     [runAction],
   )
@@ -97,10 +100,27 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(function Se
         ]}
       >
         <Flex vertical gap="small" className="w-full">
-          <Button type="primary" size="large" block loading={pending === 'previousRound'} onClick={handlePreviousRound}>
+          <div className="text-center text-sm text-slate-500">{roundCaption}</div>
+          <Button
+            type="primary"
+            size="large"
+            block
+            disabled={!hasPreviousRound}
+            title={hasPreviousRound ? undefined : roundsCount > 0 ? "Это первый раунд" : roundCaption}
+            loading={pending === 'previousRound'}
+            onClick={handlePreviousRound}
+          >
             Предыдущий раунд
           </Button>
-          <Button type="primary" size="large" block loading={pending === 'nextRound'} onClick={handleNextRound}>
+          <Button
+            type="primary"
+            size="large"
+            block
+            disabled={!hasNextRound}
+            title={hasNextRound ? undefined : roundsCount > 0 ? "Это последний раунд" : roundCaption}
+            loading={pending === 'nextRound'}
+            onClick={handleNextRound}
+          >
             Следующий раунд
           </Button>
           <Button type="primary" size="large" block disabled={!canRepeat} loading={pending === 'repeatQuestion'} onClick={handleRepeatQuestion}>

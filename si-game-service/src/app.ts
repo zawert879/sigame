@@ -16,6 +16,7 @@ import { router } from './api/rest/router'
 import { AppState } from './entity/AppState'
 import { mediaDir, removeStaleMedia } from './utils/packages'
 import { isPageRequest } from './utils/pageRoutes'
+import { shouldLogHttpError } from './utils/httpErrors'
 
 const REQUEST_TIMEOUT = 2 * 60 * 60 * 1000
 const IDLE_TIMEOUT = 5 * 60 * 1000
@@ -25,6 +26,12 @@ for (const runtimeDir of [SIQ_DIR, PACKAGES_DIR]) {
 }
 
 const app = new Koa()
+app.on('error', (error: Error, ctx?: Koa.Context) => {
+  if (shouldLogHttpError(error)) {
+    const where = ctx ? ` ${ctx.method} ${ctx.path}` : ''
+    console.error(`Ошибка HTTP${where}:`, error)
+  }
+})
 const httpServer = createServer(app.callback())
 const io = new Server(httpServer, {
   cors: {

@@ -30,6 +30,8 @@ export type LoadStatus = 'idle' | 'loading' | 'ready' | 'notFound' | 'error'
 
 export type MediaState = EventUpdateMediaPlayer & { receivedAt: number }
 
+const freshMedia = (): MediaState => ({ time: 0, isPlaying: true, receivedAt: Date.now() })
+
 type GameData = {
   gameId: string | null
   status: LoadStatus
@@ -73,7 +75,7 @@ type GameActions = {
   setSettings: (settings: ResponseGetSettings) => void
   setAnimatedQuestion: (questionId: string | null) => void
   restartQuestionMedia: () => void
-  updateMeta: (game: Pick<ResponseGetGame, 'gameId' | 'gameName' | 'packageName'>) => void
+  updateMeta: (game: Pick<ResponseGetGame, 'gameId' | 'gameName' | 'packageName' | 'progress'>) => void
   setMedia: (media: EventUpdateMediaPlayer) => void
 }
 
@@ -156,7 +158,7 @@ export const useGameStore = create<GameState>()((set) => ({
       scoreValue: game.score,
       progress: game.progress,
       answeredBy: null,
-      media: null,
+      media: { ...game.media, receivedAt: Date.now() },
     }
     let currentSelector = state.currentSelector
     switch (screenData.screen) {
@@ -203,7 +205,7 @@ export const useGameStore = create<GameState>()((set) => ({
     players: withCurrent(state.players, payload.currentSelector),
     animatedQuestionId: null,
     questionRun: state.questionRun + 1,
-    media: null,
+    media: freshMedia(),
   })),
 
   startRoundName: (payload) => set({
@@ -238,7 +240,7 @@ export const useGameStore = create<GameState>()((set) => ({
   updateQuestionPage: (payload) => set((state) => ({
     questionPage: payload,
     answeredBy: payload.pageIndex === 0 ? null : state.answeredBy,
-    media: null,
+    media: freshMedia(),
   })),
 
   updatePlayers: (update) => set((state) => ({
@@ -256,16 +258,18 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setAnimatedQuestion: (animatedQuestionId) => set({ animatedQuestionId }),
 
-  restartQuestionMedia: () => set((state) => ({ questionRun: state.questionRun + 1, media: null })),
+  restartQuestionMedia: () => set((state) => ({ questionRun: state.questionRun + 1, media: freshMedia() })),
 
   updateMeta: (game) => set((state) => (
     state.meta && state.meta.gameId === game.gameId
-      ? { meta: { ...state.meta, gameName: game.gameName, packageName: game.packageName } }
+      ? { meta: { ...state.meta, gameName: game.gameName, packageName: game.packageName }, progress: game.progress }
       : {}
   )),
 
   setMedia: (media) => set({ media: { time: media.time, isPlaying: media.isPlaying, receivedAt: Date.now() } }),
 }))
+
+export const isFreshMedia = (media: MediaState | null): boolean => !media || (media.time === 0 && media.isPlaying)
 
 export const mediaPosition = (media: MediaState, now = Date.now()): number =>
   media.isPlaying ? media.time + Math.max(0, now - media.receivedAt) / 1000 : media.time

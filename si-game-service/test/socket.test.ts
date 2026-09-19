@@ -191,7 +191,9 @@ describe('socket API', () => {
     const from = client.mark()
     expect((await client.ackError(Event.SelectPack, { file: 'broken.siq' })).error).toBe(AckErrorCode.Failed)
     expect(client.since(from)).toEqual([])
-    expect(await client.request<ResponseGetGame>(Event.GetGame, { gameId })).toEqual(before)
+    const after = await client.request<ResponseGetGame>(Event.GetGame, { gameId })
+    expect({ ...after, media: before.media }).toEqual(before)
+    expect(after.media.isPlaying).toBe(before.media.isPlaying)
   })
 
   test('emits without an ack callback are handled and keep the connection working', async () => {
@@ -424,7 +426,7 @@ describe('socket API', () => {
     displayFrom = display.mark()
     from = admin.mark()
     expect(await admin.request(Event.Next)).toEqual({})
-    expect(await admin.request(Event.NextRound)).toEqual({})
+    expect(await admin.request(Event.NextRound)).toEqual({ error: AckErrorCode.Failed, message: 'Это последний раунд' })
     await display.sync()
     expect(admin.since(from)).toEqual([])
     expect(display.since(displayFrom)).toEqual([])

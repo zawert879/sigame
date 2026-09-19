@@ -5,6 +5,7 @@ import { parseByteRange } from '../src/api/files'
 import type * as authModule from '../src/auth'
 import type * as configModule from '../src/config'
 import * as Schema from '../src/schema'
+import { isClientAbort, shouldLogHttpError } from '../src/utils/httpErrors'
 import { findPackFile, isPackFileName, uploadFileName } from '../src/utils/packFiles'
 import { isPageRequest } from '../src/utils/pageRoutes'
 import { isInsideDir, safeDecodeUriComponent } from '../src/utils/paths'
@@ -311,5 +312,25 @@ describe('config (read from the environment at import time)', () => {
 
     fs.mkdirSync(path.join(executableDir, 'siq'))
     expect(config.defaultDataDir(true, executable)).toBe(executableDir)
+  })
+})
+
+describe('httpErrors', () => {
+  const withCode = (code: string, message = 'write failed') => Object.assign(new Error(message), { code })
+
+  test('a client that closes the connection mid-response is not an error worth logging', () => {
+    for (const code of ['EPIPE', 'ECONNRESET', 'ECONNABORTED', 'ERR_STREAM_PREMATURE_CLOSE', 'ERR_STREAM_DESTROYED']) {
+      expect(isClientAbort(withCode(code))).toBe(true)
+      expect(shouldLogHttpError(withCode(code))).toBe(false)
+    }
+
+    expect(isClientAbort(new Error('aborted'))).toBe(true)
+  })
+
+  test('404 and exposed client errors stay quiet, server faults are logged', () => {
+    expect(shouldLogHttpError(Object.assign(new Error('Not Found'), { status: 404 }))).toBe(false)
+    expect(shouldLogHttpError(Object.assign(new Error('Bad Request'), { status: 400, expose: true }))).toBe(false)
+    expect(shouldLogHttpError(withCode('ENOENT', 'no such file'))).toBe(true)
+    expect(shouldLogHttpError(new Error('boom'))).toBe(true)
   })
 })

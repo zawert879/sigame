@@ -27,6 +27,10 @@ Upload/delete при заданном `ADMIN_TOKEN` требуют `x-admin-toke
   onStart* (payload из `Game.getScreenData()`), onUpdatePlayers, onUpdateScoreValue, onUpdateQuestionPage, onUpdateMediaPlayer,
   onUpdateSettings, onExit. selectGame переподписывает с предыдущей игры; Exit/disconnect — отписка.
 - `selectPack` отвечает после распаковки медиа (клиентский таймаут 180 с).
+- Медиа: `MediaPlayer` хранит time/isPlaying/updatedAt; открытие вопроса и каждая смена страницы (`Game.updatePage`) шлют
+  сначала экран/страницу, затем `reset(true)` → onUpdateMediaPlayer {0, true}. `getSnapshot().media` — позиция с учётом
+  прошедшего времени, чтобы перезагруженный ТВ/пульт продолжили с того же места.
+- Ошибки HTTP: `app.on('error')` до `app.callback()`; обрывы клиентом (`src/utils/httpErrors.ts`) не логируются.
 
 ### Добавить событие
 
@@ -49,6 +53,7 @@ Upload/delete при заданном `ADMIN_TOKEN` требуют `x-admin-toke
 Initial ─selectPack→ Screensaver ─next→ ThemeList ─next→ RoundName ─next→ ThemeListInRound ─next→ Table
 Table ─selectQuestion→ [QuestionPreparation ─next→] Question ─next… последняя страница ─next→ Table
 все вопросы раунда сыграны → Results ─next→ следующий раунд (на последнем раунде — no-op)
+nextRound/previousRound с любого экрана → RoundName; на краях пака — GameError «Это последний/первый раунд»
 ```
 Финальный раунд: выбор темы убирает её, пока не останется одна — она открывается как обычный вопрос.
 Кнопки игроков активны только на обычном вопросе; для спец-вопросов цену ставит ведущий.
