@@ -1,6 +1,6 @@
 # Окно запуска SI Game — план
 
-Дата: 2026-09-19. Статус: план, реализации нет. Превью дизайна: [`docs/launcher-preview.html`](launcher-preview.html)
+Дата: 2026-09-19. Статус: в работе (решения пользователя — в конце документа). Превью дизайна: [`docs/launcher-preview.html`](launcher-preview.html)
 (открыть в браузере; переключатели macOS/Windows и состояния сервера).
 
 ## Зачем
@@ -109,9 +109,53 @@ SI Game.app / SIGame-setup.exe
 | 4 | Сборка: DMG × 2, NSIS, entitlements, иконки, метаданные exe; CI-матрица | Артефакты в Actions |
 | 5 | Проверка на чистых машинах: macOS Apple Silicon и Intel, Windows 10/11; README для первого запуска | Релиз |
 
-## Открытые вопросы
+## Решения пользователя (2026-09-19)
 
-1. Оставляем ли параллельно «голые» бинарники (текущие `sigame.exe` / `sigame-macos-*`) для продвинутых пользователей?
-2. Нужна ли кнопка «Разрешить в брандмауэре» на Windows (запрос прав администратора) или достаточно подсказки?
-3. Открывать экран игроков на этом компьютере обычной вкладкой или отдельным окном браузера без интерфейса
-   (`--app --start-fullscreen` для Chrome/Edge)?
+1. В релизе только окно запуска (DMG для macOS arm64/x64 и установщик Windows). «Голые» бинарники `sigame.exe` /
+   `sigame-macos-*` больше не публикуются — они собираются только как сайдкар внутри приложения.
+2. Windows: кнопка «Разрешить в брандмауэре» сама добавляет правило (запрос прав администратора через UAC); текстовая
+   подсказка остаётся запасным вариантом, если пользователь отказал в правах.
+3. Экран игроков на этом компьютере — отдельное окно Chrome/Edge без интерфейса (`--app`, полный экран, автозапуск звука
+   разрешён флагом, отдельный профиль); если Chrome/Edge не найден — обычная вкладка браузера по умолчанию.
+
+## Реализация — контракт (2026-09-19)
+
+### Сервер в режиме лаунчера
+
+Лаунчер запускает сайдкар `sigame-server` с env `SIGAME_LAUNCHER=1`, `SIQ_DIR=<data>/siq`, `PACKAGES_DIR=<data>/packages`,
+где `<data>` — `~/Library/Application Support/SIGame` (macOS) или `%LOCALAPPDATA%\SIGame` (Windows), то есть те же
+каталоги, что у упакованного сервера по умолчанию. `PORT` не задаётся: 4000 и запасные 4001–4010, затем любой свободный.
+В режиме лаунчера чужая SI Game на порту считается занятым портом (сервер не завершается с «уже запущена»),
+QR-баннер не печатается, сервер завершается, когда закрывается stdin (лаунчер умер).
+
+stdout — строки `ПРЕФИКС {json}` (UTF-8, одна строка на сообщение); прочие строки stdout/stderr — лог:
+
+- `SIGAME_READY {"version":"1.0.0","port":4000,"addresses":[{"address":"192.168.1.135","name":"en0","score":350}],"gameId":"<uuid>","adminToken":null,"siqDir":"…","packsCount":3}` —
+  один раз после `listen`; `addresses` — `getLanCandidates()` по убыванию `score`, может быть пустым.
+- `SIGAME_STATUS {"connections":{"player":1,"admin":1},"packsCount":3}` — сразу после READY и при каждом изменении
+  (не чаще раза в 300 мс). Роли — `auth.role` в handshake socket.io (`'player'` на `/player…` и `/`, `'admin'` на `/admin…`),
+  сокеты без роли не считаются. `packsCount` — число `.siq` в `SIQ_DIR` (пересчёт раз в 3 с и после загрузки/удаления пака).
+- `SIGAME_FAILED {"message":"…"}` — не удалось открыть порт; затем выход с кодом 1.
+
+### Окно (Tauri 2, каталог `launcher/`)
+
+- `launcher/src-tauri` — Rust, `launcher/src` — статический HTML/CSS/JS без сборщика (`withGlobalTauri`).
+  productName `SI Game`, identifier `app.sigame.launcher`, сайдкар `binaries/sigame-server-<target-triple>[.exe]`.
+- Состояние `LauncherState` (camelCase JSON): `status` (`starting|ready|failed|stopped`), `message`, `port`, `addresses`,
+  `selectedAddress`, `gameId`, `adminToken`, `connections {player, admin}`, `packsCount`, `siqDir`, `logDir`, `version`,
+  `platform` (`macos|windows|linux`), `tvBrowser` (имя найденного Chrome/Edge или `null`),
+  `firewall` (`allowed|missing|unknown|unsupported`). Команда `get_state`; событие `launcher-state` при каждом изменении.
+- Команды: `select_address(address)` (запоминается в конфиге лаунчера), `qr_svg(text)` → SVG-строка,
+  `open_admin()` (браузер по умолчанию, `http://127.0.0.1:<port>/admin/` + `?token=`), `open_tv()` (Chrome/Edge:
+  `--app=http://127.0.0.1:<port>/player/ --start-fullscreen --autoplay-policy=no-user-gesture-required`, отдельный профиль
+  `<data>/tv-browser`; иначе браузер по умолчанию), `copy_text(text)`, `open_packs_folder()`, `open_logs_folder()`,
+  `allow_firewall()` (Windows: netsh с UAC для пути сайдкара, профиль any), `restart_server()`, `quit()`.
+- Адреса для QR: ТВ — `http://<selectedAddress>:<port>/`, телефон ведущего — `http://<selectedAddress>:<port>/admin/` (+ токен).
+
+### Сборка
+
+- `scripts/launcher.js <mac|mac-arm64|mac-x64|win>`: `yarn build` → pkg-сайдкар нужной архитектуры в
+  `launcher/src-tauri/binaries/` → `tauri build --target <triple>` → `release/SI-Game-<version>-macos-arm64.dmg`,
+  `…-macos-x64.dmg`, `…-windows-x64-setup.exe`. macOS: ad-hoc подпись (`signingIdentity "-"`), без hardened runtime.
+- CI (`build.yml`): check → матрица macos-latest (aarch64, x86_64) + windows-latest → артефакты `sigame-launcher-*`;
+  `release.yml` публикует только DMG и установщик Windows.
