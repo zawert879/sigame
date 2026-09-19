@@ -191,6 +191,51 @@ describe('listenSafely', () => {
     }
   })
 
+  test('treatRunningAsBusy: SI Game on the implicit port is skipped like any busy port', async () => {
+    const sigame = await startServer()
+    try {
+      const port = Number(new URL(sigame.base).port)
+      const busy = portOf(await otherApp())
+      const free = await freePort()
+      const target = http.createServer()
+      expect(await listenSafely(target, { port, isExplicit: false, host: HOST, fallbackPorts: [busy, port, free], treatRunningAsBusy: true }))
+        .toEqual({ status: 'listening', port: free })
+      opened.push(target)
+      expect(portOf(target)).toBe(free)
+    } finally {
+      await sigame.close()
+    }
+  })
+
+  test('treatRunningAsBusy: SI Game on every candidate port gives an ephemeral port', async () => {
+    const first = await startServer()
+    const second = await startServer()
+    try {
+      const ports = [first, second].map(server => Number(new URL(server.base).port))
+      const target = http.createServer()
+      const result = await listenSafely(target, { port: ports[0], isExplicit: false, host: HOST, fallbackPorts: [ports[1]], treatRunningAsBusy: true })
+      opened.push(target)
+      expect(result).toEqual({ status: 'listening', port: portOf(target) })
+      expect(ports).not.toContain(result.port)
+    } finally {
+      await first.close()
+      await second.close()
+    }
+  })
+
+  test('treatRunningAsBusy does not change an explicit port: SI Game there is still a failure', async () => {
+    const sigame = await startServer()
+    try {
+      const port = Number(new URL(sigame.base).port)
+      const target = http.createServer()
+      expect(await listenSafely(target, { port, isExplicit: true, host: HOST, fallbackPorts: [await freePort()], treatRunningAsBusy: true }))
+        .toEqual({ status: 'failed', port, reason: 'sigame' })
+      expect(target.listening).toBe(false)
+    } finally {
+      await sigame.close()
+    }
+  })
+
   test('every fallback port taken: an ephemeral port', async () => {
     const busy = portOf(await otherApp())
     const alsoBusy = portOf(await otherApp())

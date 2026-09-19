@@ -1,5 +1,4 @@
 import React, { FC, useEffect, useRef, useState } from "react"
-import { useRouter } from "next/router"
 import { Button, QRCode } from "antd"
 import * as Data from "@/data"
 import { Screensaver } from "@/components/admin/Screensaver"
@@ -40,7 +39,6 @@ const useQrSize = () => {
 }
 
 const InitialScreen: FC<{ adminPath: string }> = ({ adminPath }) => {
-  const router = useRouter()
   const size = useQrSize()
   const quietZone = Math.round(size * QR_QUIET_ZONE)
 
@@ -62,7 +60,7 @@ const InitialScreen: FC<{ adminPath: string }> = ({ adminPath }) => {
         <Button
           size="large"
           className="!h-auto !px-[2.4em] !py-[0.3em] !text-[length:clamp(1.5rem,3.4vh,3.5rem)] !font-bold !tracking-wider !text-blue-900 !bg-yellow-300 !border-yellow-300 hover:!bg-yellow-200"
-          onClick={() => { void router.push(adminPath) }}
+          onClick={() => { window.location.assign(adminPath) }}
         >
           GO
         </Button>

@@ -14,6 +14,12 @@ export type ListenOptions = {
   isExplicit: boolean;
   host?: string;
   fallbackPorts?: number[];
+  treatRunningAsBusy?: boolean;
+}
+
+type FirstFreeOptions = {
+  host: string | undefined;
+  treatRunningAsBusy: boolean;
 }
 
 export type ListenResult = {
@@ -108,35 +114,35 @@ const listenExplicit = async (server: Server, port: number, host: string | undef
   }
 }
 
-const listenFirstFree = async (server: Server, candidates: number[], host: string | undefined, failure: ListenResult): Promise<ListenResult> => {
+const listenFirstFree = async (server: Server, candidates: number[], options: FirstFreeOptions, failure: ListenResult): Promise<ListenResult> => {
   const [candidate, ...rest] = candidates
   if (candidate === undefined) {
     return failure
   }
 
   if (candidate !== 0 && await isPortBusy(candidate)) {
-    return await readHealth(candidate)
+    return !options.treatRunningAsBusy && await readHealth(candidate)
       ? { status: 'running', port: candidate }
-      : listenFirstFree(server, rest, host, failure)
+      : listenFirstFree(server, rest, options, failure)
   }
 
   try {
-    return { status: 'listening', port: await listenOn(server, candidate, host) }
+    return { status: 'listening', port: await listenOn(server, candidate, options.host) }
   } catch (error) {
     const errno = toErrno(error)
     const result: ListenResult = { status: 'failed', port: candidate, reason: 'error', error: errno }
-    return RETRY_CODES.has(errno.code ?? '') ? listenFirstFree(server, rest, host, result) : result
+    return RETRY_CODES.has(errno.code ?? '') ? listenFirstFree(server, rest, options, result) : result
   }
 }
 
 export const listenSafely = async (server: Server, options: ListenOptions): Promise<ListenResult> => {
-  const { port, isExplicit, host, fallbackPorts = FALLBACK_PORTS } = options
+  const { port, isExplicit, host, fallbackPorts = FALLBACK_PORTS, treatRunningAsBusy = false } = options
   if (isExplicit || port === 0) {
     return listenExplicit(server, port, host)
   }
 
   const candidates = [...new Set([port, ...fallbackPorts]), 0]
-  return listenFirstFree(server, candidates, host, { status: 'failed', port, reason: 'busy' })
+  return listenFirstFree(server, candidates, { host, treatRunningAsBusy }, { status: 'failed', port, reason: 'busy' })
 }
 
 export const listenFailureMessage = (result: Extract<ListenResult, { status: 'failed' }>, url: string): string => {

@@ -8,6 +8,7 @@ import { uploadFileName } from '../../../utils/packFiles'
 import { readSiqName } from '../../../utils/parseSIQ'
 import { toArray } from '../../../utils/siqValue'
 import { forgetPackName } from '../packs/controller'
+import { launcherStatus } from '../../../launcherStatus'
 
 const MAX_FILE_SIZE = 1024 * 1024 * 1024
 const FILE_FIELD = 'file'
@@ -100,6 +101,7 @@ const upload = async (ctx: Context) => {
       forgetPackName(name)
     }
 
+    void launcherStatus.refreshPacks()
     const names = targets.map(({ name }) => name)
     ctx.body = names.length === 1 ? { file: names[0] } : { file: names[0], files: names }
   } catch (error) {

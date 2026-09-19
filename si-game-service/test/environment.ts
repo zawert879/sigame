@@ -18,6 +18,7 @@ export default class SigameTestEnvironment extends TestEnvironment {
     env.FRONTEND_STATIC_DIR = path.join(this._root, 'public')
     delete env.ADMIN_TOKEN
     delete env.PORT
+    delete env.SIGAME_LAUNCHER
 
     fs.mkdirSync(env.SIQ_DIR)
     fs.mkdirSync(env.PACKAGES_DIR)

@@ -14,6 +14,7 @@ import { Controller } from './api/socket/Controller'
 import { Socket } from './api/socket/Socket'
 import { router } from './api/rest/router'
 import { AppState } from './entity/AppState'
+import { launcherStatus } from './launcherStatus'
 import { mediaDir, removeStaleMedia } from './utils/packages'
 import { isPageRequest } from './utils/pageRoutes'
 import { shouldLogHttpError } from './utils/httpErrors'
@@ -73,6 +74,7 @@ if (fs.existsSync(FRONTEND_STATIC_DIR)) {
 }
 
 io.on(SystemEvent.Connection, socketIo => {
+  launcherStatus.trackSocket(socketIo)
   const socket = new Socket(socketIo)
   // eslint-disable-next-line no-new
   new Controller(socket, appState, isAdminToken(socket.authToken))
@@ -87,4 +89,4 @@ const defaultGame = appState.newGame('Default')
 httpServer.timeout = IDLE_TIMEOUT
 httpServer.requestTimeout = REQUEST_TIMEOUT
 
-export { app, io, httpServer, appState, defaultGame }
+export { app, io, httpServer, appState, defaultGame, launcherStatus }

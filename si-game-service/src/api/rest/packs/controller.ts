@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import { type Context } from 'koa'
 import path from 'path'
 import { siqDir } from '../../../data'
+import { launcherStatus } from '../../../launcherStatus'
 import type { PackInfo, ResponseGetPacks } from '../../../types'
 import { findPackFile } from '../../../utils/packFiles'
 import { readSiqName } from '../../../utils/parseSIQ'
@@ -72,6 +73,7 @@ const removePack = async (ctx: Context) => {
   try {
     await fs.rm(filePath)
     forgetPackName(file)
+    void launcherStatus.refreshPacks()
     ctx.body = { message: 'ok' }
   } catch (error) {
     console.warn(`Не удалось удалить пак ${file}:`, error instanceof Error ? error.message : error)

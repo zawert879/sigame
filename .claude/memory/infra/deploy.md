@@ -1,6 +1,6 @@
 ---
 name: infra-deploy
-description: CI и десктопные релизы SI Game — build.yml собирает exe и mac-бинарники на каждый push, release.yml публикует их по тегу v*
+description: CI и десктопные релизы SI Game — build.yml собирает окно запуска (DMG arm64/x64, NSIS) на каждый push, release.yml публикует их по тегу v*
 metadata:
   type: project
 ---
@@ -12,12 +12,13 @@ Docker-деплой (GHCR + dcm.zawserv.ru) удалён 2026-09-18 по реш�
 | Файл | Триггер | Что делает |
 |---|---|---|
 | `.github/workflows/check.yml` | pull_request, workflow_call | Linux: install (frozen) → typecheck/lint/test сервиса, typecheck/lint админки, `yarn build`, `yarn smoke` |
-| `.github/workflows/build.yml` | push в любую ветку, workflow_dispatch, workflow_call | check → macos-latest: `yarn package:all` → smoke mac-бинарника → артефакты `sigame-windows-x64`, `sigame-macos-arm64`, `sigame-macos-x64` (14 дней) |
-| `.github/workflows/release.yml` | тег `v*`, workflow_dispatch(tag) | build.yml → GitHub Release с `sigame.exe`, `sigame-macos-arm64.tar.gz`, `sigame-macos-x64.tar.gz` |
+| `.github/workflows/build.yml` | push в любую ветку, workflow_dispatch, workflow_call | check → матрица `launcher`: macos-latest × aarch64/x86_64, windows-latest × x86_64-pc-windows-msvc: build → сайдкар (`package.js <t> --sidecar`) → smoke сайдкара (x64 через Rosetta) → `launcher.js <t> --skip-build --skip-sidecar` → артефакты `sigame-launcher-macos-arm64|macos-x64|windows-x64` (14 дней) |
+| `.github/workflows/release.yml` | тег `v*`, workflow_dispatch(tag) | build.yml → GitHub Release только с `SI-Game-<v>-macos-arm64.dmg`, `…-macos-x64.dmg`, `…-windows-x64-setup.exe` |
 
-Все платформы пакуются на одном macOS-раннере: `scripts/package.js` вызывает `@yao-pkg/pkg@6.22.0` с `--no-bytecode`
-(кросс-сборка exe без запуска Windows-бинарника), mac-бинарники подписываются ad-hoc `codesign` и упаковываются в tar.gz
-(сохраняет исполняемый бит). Node 24 везде (setup-node, pkg-таргеты, root `engines`).
+Сайдкар — `@yao-pkg/pkg@6.22.0` с `--no-bytecode`, Node 24; mac-сайдкар подписывается ad-hoc. Tauri 2.11 собирает `.app`/DMG
+(ad-hoc `signingIdentity "-"`, без hardened runtime, entitlements allow-jit) и NSIS (установка для текущего пользователя).
+Отдельные бинарники сервера (`sigame.exe`, `sigame-macos-*`) больше не публикуются — решение пользователя 2026-09-19;
+`yarn package:*` остаётся для локальной проверки и smoke.
 
 ## Ограничения
 

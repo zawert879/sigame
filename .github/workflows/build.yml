@@ -14,11 +14,36 @@ jobs:
   check:
     uses: ./.github/workflows/check.yml
 
-  build:
-    name: Package Windows and macOS
+  launcher:
+    name: Launcher ${{ matrix.artifact }}
     needs: check
-    runs-on: macos-latest
-    timeout-minutes: 30
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            platform: mac-arm64
+            artifact: macos-arm64
+            sidecar: sigame-server-aarch64-apple-darwin
+            file: macos-arm64.dmg
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            platform: mac-x64
+            artifact: macos-x64
+            sidecar: sigame-server-x86_64-apple-darwin
+            file: macos-x64.dmg
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: win
+            artifact: windows-x64
+            sidecar: sigame-server-x86_64-pc-windows-msvc.exe
+            file: windows-x64-setup.exe
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -31,43 +56,48 @@ jobs:
           cache-dependency-path: |
             si-game-admin-2/yarn.lock
             si-game-service/yarn.lock
+            launcher/yarn.lock
 
-      - name: Install frontend dependencies
-        working-directory: si-game-admin-2
-        run: yarn install --frozen-lockfile
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-      - name: Install backend dependencies
-        working-directory: si-game-service
-        run: yarn install --frozen-lockfile
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: launcher/src-tauri
+          key: ${{ matrix.target }}
 
-      - name: Build Windows and macOS executables
-        run: yarn package:all
+      - name: Install dependencies
+        run: |
+          yarn --cwd si-game-service install --frozen-lockfile
+          yarn --cwd si-game-admin-2 install --frozen-lockfile
+          yarn --cwd launcher install --frozen-lockfile
 
-      - name: Smoke-test the macOS executable
-        env:
-          SMOKE_EXECUTABLE: release/sigame-macos-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
-        run: yarn smoke "$SMOKE_EXECUTABLE"
+      - name: Build the game
+        run: yarn build
 
-      - name: Upload Windows build
+      - name: Build the server sidecar
+        run: node scripts/package.js ${{ matrix.platform }} --sidecar --skip-build
+
+      - name: Install Rosetta for the Intel sidecar
+        if: ${{ matrix.target == 'x86_64-apple-darwin' }}
+        run: |
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+
+      - name: Smoke-test the server sidecar
+        run: yarn smoke "launcher/src-tauri/binaries/${{ matrix.sidecar }}"
+
+      - name: Build the launcher
+        run: node scripts/launcher.js ${{ matrix.platform }} --skip-build --skip-sidecar
+
+      - name: Upload the launcher
         uses: actions/upload-artifact@v7
         with:
-          name: sigame-windows-x64
-          path: release/sigame.exe
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload macOS Apple Silicon build
-        uses: actions/upload-artifact@v7
-        with:
-          name: sigame-macos-arm64
-          path: release/sigame-macos-arm64.tar.gz
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload macOS Intel build
-        uses: actions/upload-artifact@v7
-        with:
-          name: sigame-macos-x64
-          path: release/sigame-macos-x64.tar.gz
+          name: sigame-launcher-${{ matrix.artifact }}
+          path: release/SI-Game-*-${{ matrix.file }}
           if-no-files-found: error
           retention-days: 14

@@ -62,6 +62,8 @@ export const isPortExplicit = envPort !== null
 
 export const ADMIN_TOKEN: string | null = envValue('ADMIN_TOKEN') ?? null
 
+export const isLauncherMode = envValue('SIGAME_LAUNCHER') === '1'
+
 export const SIQ_DIR = resolveDir(process.env.SIQ_DIR, path.join(dataDir, 'siq'))
 export const PACKAGES_DIR = resolveDir(process.env.PACKAGES_DIR, path.join(dataDir, 'packages'))
 export const FRONTEND_STATIC_DIR = resolveDir(process.env.FRONTEND_STATIC_DIR, path.join(__dirname, '..', '..', 'public'))

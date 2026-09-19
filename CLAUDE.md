@@ -33,7 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Не добавлять комментарии в код (исходники, скрипты, конфиги, workflow). Служебные директивы (`eslint-disable…`, `@ts-expect-error`) — только когда без них не проходит линт/typecheck
 - Не добавлять `Co-Authored-By` в коммиты
 - Только zsh, никаких PowerShell-скриптов; скрипты сборки — на Node (`scripts/*.js`)
-- Тег `v*` = публичный релиз (GitHub Release с exe и mac-бинарниками) — только по явной просьбе
+- Тег `v*` = публичный релиз (GitHub Release с DMG для macOS и установщиком Windows) — только по явной просьбе
 - Рабочие документы (планы, аудиты, отчёты) — в `docs/` (кроме этого `CLAUDE.md` — он живёт в корне)
 
 ---
@@ -41,14 +41,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Проект
 
 Клон «Своей игры» (SIGame) для офлайн-игры в LAN: играет `.siq`-паки. Один Node-процесс отдаёт REST, socket.io
-и собранный статический фронтенд (порт `PORT`, по умолчанию 4000). Поставка — только десктопные исполняемые
-файлы (Windows exe, macOS arm64/x64); Docker-деплоя нет.
+и собранный статический фронтенд (порт `PORT`, по умолчанию 4000). Поставка — нативное окно запуска на Tauri 2
+(`launcher/`: DMG для macOS arm64/x64, NSIS-установщик Windows x64), внутри которого сервер работает сайдкаром;
+отдельные бинарники сервера и Docker не публикуются.
 
 | Каталог | Стек | Назначение |
 |---|---|---|
 | `si-game-service/` | Koa 2, socket.io 4, zod, TS (commonjs), Jest | Игровой сервер; состояние игр только в памяти |
 | `si-game-admin-2/` | Next.js 14.2 pages router, `output: 'export'`, antd 5, Tailwind 3, zustand | Весь UI: экран игроков `/player/<id>` и пульт ведущего `/admin/<id>` |
 | `common/` | TS | `data.ts` — рантайм-enum'ы протокола, `types.ts` — типы запросов/ответов/пушей |
+| `launcher/` | Tauri 2 (Rust, `src-tauri/`), статический HTML/CSS/JS (`src/`) | Окно запуска: сайдкар-сервер, QR и адрес для ТВ, пульт, экран игроков в Chrome/Edge, брандмауэр Windows |
 
 ## Команды
 
@@ -60,8 +62,15 @@ yarn build          # (корень) next export → tsc сервиса → ко
 yarn start          # (корень) собранный сервер
 yarn package:win    # (корень) build + @yao-pkg/pkg → release/sigame.exe
 yarn package:mac    # (корень) → release/sigame-macos-arm64|x64 (+ .tar.gz), ad-hoc codesign — только на macOS
-yarn package:all
+yarn package:all    # сайдкар для лаунчера: node scripts/package.js <mac-arm64|mac-x64|win> --sidecar [--skip-build]
 yarn smoke          # (корень) после build: поднимает сервер и проверяет страницы, ассеты, REST, socket.io
+yarn launcher:mac   # build → сайдкары → tauri build → release/SI-Game-<v>-macos-arm64|x64.dmg (локально CI=true, иначе Finder-скрипт DMG)
+yarn launcher:win   # только на Windows → release/SI-Game-<v>-windows-x64-setup.exe
+yarn launcher:dev   # tauri dev с сайдкаром этой машины
+yarn launcher:icons # иконки из launcher/src-tauri/icons/source.svg
+
+# launcher/src-tauri/ (Rust в ~/.cargo/bin)
+cargo fmt --check && cargo clippy --target aarch64-apple-darwin --all-targets -- -D warnings && cargo test
 
 # si-game-service/
 yarn dev            # node --watch + ts-node
@@ -78,7 +87,8 @@ yarn build          # static export → out/
 
 Проверка изменения: `yarn typecheck && yarn lint` в затронутом приложении, `yarn test` для сервиса,
 `yarn build && yarn smoke` в корне (`yarn smoke <бинарник>` проверяет упакованный exe/mac-бинарник).
-CI: `check.yml` — то же на PR; `build.yml` — check + упаковка Win/Mac в артефакты на каждый push; `release.yml` — релиз по тегу `v*`.
+CI: `check.yml` — то же на PR; `build.yml` — check + матрица лаунчера (macOS arm64/x64, Windows x64) в артефакты
+`sigame-launcher-*` на каждый push; `release.yml` — релиз DMG и установщика по тегу `v*`.
 
 Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управления), `SIQ_DIR`, `PACKAGES_DIR`, `FRONTEND_STATIC_DIR`
 (`si-game-service/src/config.ts`, читаются один раз при импорте). Упакованный бинарник по умолчанию хранит данные не в cwd,
@@ -116,6 +126,11 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
   «Далее» — в строке действий под превью экрана (`components/admin/HostActions.tsx`: отвечающий, ✕/✓, кнопка с подписью
   следующего шага, клавиша PageDown); на телефоне — вертикальная прокрутка, таблица игроков всегда доступна. Полосу цены на ТВ
   (`player/QuestionScore.tsx`) не менять — пользователь доволен её размером.
+- **Окно запуска.** `launcher/src-tauri` запускает сайдкар `sigame-server` (pkg-сборка сервера) с `SIGAME_LAUNCHER=1`,
+  `SIQ_DIR`/`PACKAGES_DIR` в `~/Library/Application Support/SIGame` / `%LOCALAPPDATA%\SIGame`. Сервер в этом режиме
+  пишет в stdout `SIGAME_READY|SIGAME_STATUS|SIGAME_FAILED {json}` (`src/launcherStatus.ts`), считает сокеты по `auth.role`
+  (`player`/`admin`, ставит `client/index.ts`) и завершается, когда закрыт stdin. Rust держит `LauncherState` и шлёт окну
+  событие `launcher-state`; команды — `commands.rs`. Контракт — конец `docs/LAUNCHER-PLAN.md`.
 - **Паки.** `.siq` в `SIQ_DIR`; при старте пака медиа распаковываются в `PACKAGES_DIR/run-<pid>-<uuid>/<gameId>/`
   (чистятся только каталоги завершённых запусков) и раздаются как `/api/files/<gameId>/<Images|Audio|Video>/<name>`
   с поддержкой HTTP Range (URL строит `utils/api.ts` `mediaUrl`). Поддерживаются SIQ 5
@@ -145,7 +160,7 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
 - Обрывы соединения клиентом (EPIPE, ECONNRESET при перемотке медиа) Koa не печатает — `app.on('error')` в `src/app.ts`
   регистрируется до `app.callback()`, иначе Koa добавит свой обработчик со стеком.
 - XML-парсер работает с `parseTagValue: false`: тексты пака всегда строки.
-- Jest-тесты сервиса (333) собирают `.siq`-фикстуры на лету (`test/helpers`); конфиг читается при импорте, поэтому env
+- Jest-тесты сервиса (364) собирают `.siq`-фикстуры на лету (`test/helpers`); конфиг читается при импорте, поэтому env
   выставляется до `require` модулей приложения.
 - Порт: сервер проверяет его до `listen` (`src/portGuard.ts`); если `PORT` не задан и 4000 занят — `/api/health` чужого
   процесса, затем 4001–4010, затем любой свободный. Баннер печатает реальный порт и две ссылки: для ТВ и для ведущего.

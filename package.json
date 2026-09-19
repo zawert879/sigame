@@ -11,7 +11,13 @@
     "start": "yarn --cwd si-game-service start",
     "package:win": "node scripts/package.js win",
     "package:mac": "node scripts/package.js mac",
-    "package:all": "node scripts/package.js all"
+    "package:all": "node scripts/package.js all",
+    "launcher:mac": "node scripts/launcher.js mac",
+    "launcher:mac-arm64": "node scripts/launcher.js mac-arm64",
+    "launcher:mac-x64": "node scripts/launcher.js mac-x64",
+    "launcher:win": "node scripts/launcher.js win",
+    "launcher:dev": "node scripts/launcher.js dev",
+    "launcher:icons": "node scripts/icons.js"
   },
   "pkg": {
     "assets": [
