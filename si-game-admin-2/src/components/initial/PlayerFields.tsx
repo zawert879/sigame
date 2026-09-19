@@ -2,8 +2,9 @@ import { ChangeEvent, CSSProperties, FC, KeyboardEvent, useCallback, useEffect, 
 import { Input as AntInput } from "antd";
 import { Input } from "../override/Input";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
-import { useKeyPress } from "@/hooks/useKeyPress";
+import { isNextKey, useKeyPress } from "@/hooks/useKeyPress";
 import { keyLabel } from "@/utils/keys";
+import { notifyErrorText } from "@/utils/notify";
 
 const NAME_ROWS = { minRows: 1, maxRows: 3 }
 const KEY_MIN_WIDTH = "3.5rem"
@@ -79,6 +80,10 @@ export const PlayerKeyInput: FC<{
       return
     }
     event.preventDefault()
+    if (isNextKey(event.code, event.key)) {
+      notifyErrorText('Page Down нельзя назначить игроку: этой клавишей ведущий переходит дальше')
+      return
+    }
     void onChange(event.code)
   }, [onChange])
 

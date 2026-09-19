@@ -9,6 +9,7 @@ import ThemesList from "@/components/admin/ThemesList"
 import ThemeRound from "@/components/admin/ThemeRound"
 import { AdminTable } from "@/components/admin/AdminTable"
 import { QuestionAdmin } from "@/components/admin/QuestionAdmin"
+import { HostActions } from "@/components/admin/HostActions"
 import { Results } from "@/components/Results"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
 import { GameStatusView } from "./GameStatusView"
@@ -72,16 +73,19 @@ export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> 
         <div className="flex flex-1 flex-col gap-2 p-2 sm:gap-3 sm:p-3 lg:min-h-0 lg:flex-row">
           <main
             aria-label={screenTitle(screen)}
-            className={`relative min-w-0 overflow-hidden rounded-xl bg-blue-800 text-white shadow-sm lg:h-auto lg:min-h-0 lg:flex-1 ${stageHeight}`}
+            className="flex min-w-0 flex-col overflow-hidden rounded-xl bg-blue-800 text-white shadow-sm lg:min-h-0 lg:flex-1"
           >
-            {screen === Data.Screen.Screensaver && <Screensaver className="text-3xl sm:text-5xl lg:text-6xl" />}
-            {screen === Data.Screen.ThemeList && themeList && <ThemesList themes={themeList.themes} />}
-            {screen === Data.Screen.ThemeListInRound && themeListInRound && <ThemesList themes={themeListInRound.themes} />}
-            {screen === Data.Screen.RoundName && roundName && <ThemeRound themeName={roundName.name} />}
-            {screen === Data.Screen.Table && table && <AdminTable data={table} />}
-            {screen === Data.Screen.QuestionPreparation && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={true} />}
-            {screen === Data.Screen.Question && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={false} />}
-            {screen === Data.Screen.Results && <Results players={players} isLastRound={isLastRound} compact />}
+            <div className={`relative min-w-0 overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1 ${stageHeight}`}>
+              {screen === Data.Screen.Screensaver && <Screensaver className="text-3xl sm:text-5xl lg:text-6xl" />}
+              {screen === Data.Screen.ThemeList && themeList && <ThemesList themes={themeList.themes} />}
+              {screen === Data.Screen.ThemeListInRound && themeListInRound && <ThemesList themes={themeListInRound.themes} />}
+              {screen === Data.Screen.RoundName && roundName && <ThemeRound themeName={roundName.name} />}
+              {screen === Data.Screen.Table && table && <AdminTable data={table} />}
+              {screen === Data.Screen.QuestionPreparation && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={true} />}
+              {screen === Data.Screen.Question && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={false} />}
+              {screen === Data.Screen.Results && <Results players={players} isLastRound={isLastRound} compact />}
+            </div>
+            <HostActions />
           </main>
           <aside aria-label="Управление игроками" className="flex shrink-0 flex-col gap-2 sm:gap-3 lg:min-h-0 lg:w-[23rem] lg:overflow-y-auto xl:w-[31rem] 2xl:w-[36rem]">
             <PlayerTable players={players} />

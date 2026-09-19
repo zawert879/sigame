@@ -1,0 +1,463 @@
+<meta charset="utf-8">
+<title>Кнопка «Далее» на пульте</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Oswald:wght@500;600&display=swap">
+<style>
+  :root {
+    --ground: #eaeef6;
+    --panel: #ffffff;
+    --ink: #111a36;
+    --muted: #5a6488;
+    --line: #d6dcec;
+    --accent: #2f6bff;
+    --accent-ink: #ffffff;
+    --gold: #f2c12e;
+    --chip: #f1f4fb;
+    --good: #1c9a58;
+    --bad: #d84a4a;
+    --focus: #2f6bff;
+    --display: "Oswald", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --body: "Golos Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #070b18;
+      --panel: #10172e;
+      --ink: #e7ebf8;
+      --muted: #9aa4c8;
+      --line: #263057;
+      --chip: #182243;
+      --good: #4fd08e;
+      --bad: #ff7b7b;
+      --focus: #8fb0ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #070b18;
+    --panel: #10172e;
+    --ink: #e7ebf8;
+    --muted: #9aa4c8;
+    --line: #263057;
+    --chip: #182243;
+    --good: #4fd08e;
+    --bad: #ff7b7b;
+    --focus: #8fb0ff;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--ground); color: var(--ink); font: 15px/1.5 var(--body); padding-inline: 16px; padding-block: 24px 56px; }
+  .wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 22px; }
+
+  header.top { display: grid; gap: 14px; }
+  header.top h1 { font-family: var(--display); font-weight: 600; font-size: clamp(24px, 3.2vw, 34px); letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+  header.top p { margin: 0; color: var(--muted); max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tab {
+    font: 600 14px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center;
+  }
+  .tab b { font-family: var(--display); font-weight: 600; font-size: 15px; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--chip); color: var(--muted); }
+  .tab[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .tab[aria-pressed="true"] b { background: var(--accent); color: var(--accent-ink); }
+  .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; user-select: none; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .stage { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-end; justify-content: center; }
+  .device { display: grid; gap: 8px; justify-items: center; }
+  .device figcaption { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .bezel { background: #0b0f1d; border-radius: calc(var(--r) * 1px); padding: calc(var(--pad) * 1px); box-shadow: 0 18px 40px -18px rgba(8, 16, 48, 0.55); }
+  .viewport { width: calc(var(--w) * var(--s) * 1px); height: calc(var(--h) * var(--s) * 1px); overflow: hidden; border-radius: calc(var(--r) * 0.6px); position: relative; background: #e9edf5; }
+  .scaler { width: calc(var(--w) * 1px); height: calc(var(--h) * 1px); transform: scale(var(--s)); transform-origin: 0 0; position: absolute; inset: 0 auto auto 0; }
+
+  .explain { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; align-content: start; }
+  .card h2 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: 0.01em; }
+  .card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 0 0; }
+  .card p { margin: 0; max-width: 68ch; }
+  .card ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+  .pros li::marker { color: var(--good); }
+  .cons li::marker { color: var(--bad); }
+  .where { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 14px; }
+  .where dt { color: var(--muted); }
+  .where dd { margin: 0; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr[data-active="true"] { background: var(--chip); }
+  .dots { font-variant-numeric: tabular-nums; letter-spacing: 2px; color: var(--accent); white-space: nowrap; }
+  .dots span { color: var(--line); }
+  .note { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+  .app { font-family: -apple-system, "Segoe UI", system-ui, Roboto, sans-serif; width: 100%; height: 100%; display: flex; flex-direction: column; background: #e9edf5; color: #0f1733; position: relative; overflow: hidden; }
+  .app .hdr { background: #0f1f4d; color: #fff; display: flex; align-items: center; gap: 12px; padding: 10px 12px; flex: none; }
+  .app .hdr .mid { flex: 1; display: grid; gap: 4px; justify-items: center; min-width: 0; }
+  .app .hdr .t { color: #f7d34b; font-weight: 700; font-size: 18px; }
+  .app .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 3px 8px; width: 100%; font-size: 12px; align-items: center; }
+  .app.wide .bars { grid-template-columns: repeat(3, max-content minmax(60px, 1fr) max-content); gap: 0 10px; }
+  .app .bar { height: 5px; border-radius: 3px; background: #2a3a70; overflow: hidden; }
+  .app .bar i { display: block; height: 100%; background: linear-gradient(90deg, #6a9bff, #9be07b); }
+  .app .ib { width: 46px; height: 46px; border-radius: 10px; background: #2f6bff; display: grid; place-items: center; flex: none; color: #fff; }
+  .app .ib svg { width: 24px; height: 24px; }
+  .app .body { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; }
+  .app.narrow .body { flex-direction: column; overflow: hidden; }
+  .app .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .app.wide .main > .stagecard { flex: 1; grid-template-rows: auto 1fr auto; }
+  .app.wide .grid2 { align-items: stretch; }
+  .app.wide.has-bar .main { padding-bottom: 88px; }
+  .app .side { width: 340px; flex: none; display: flex; flex-direction: column; gap: 12px; }
+  .app .stagecard { background: linear-gradient(160deg, #2446c9, #1a36a3); border-radius: 12px; padding: 10px; display: grid; gap: 10px; color: #fff; }
+  .app .chips { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+  .app .chips span { background: rgba(255, 255, 255, 0.14); border-radius: 6px; padding: 3px 7px; }
+  .app .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
+  .app.narrow .grid2 { grid-template-columns: 1fr 1fr; }
+  .app .screen { background: rgba(0, 0, 0, 0.14); border-radius: 10px; padding: 8px; display: grid; gap: 8px; align-content: space-between; min-height: 150px; }
+  .app.wide .screen { min-height: 300px; }
+  .app .lbl { font-size: 10px; letter-spacing: 0.08em; font-weight: 700; opacity: 0.8; display: flex; justify-content: space-between; }
+  .app .disc { width: 38%; max-width: 150px; aspect-ratio: 1; margin: 0 auto; }
+  .app .player { background: #0b1233; border-radius: 8px; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 11px; }
+  .app .player .line { flex: 1; height: 3px; background: #3a4570; border-radius: 2px; }
+  .app .answers { display: grid; gap: 10px; align-content: start; }
+  .app .ans { background: #fff7de; color: #1b1606; border-radius: 10px; padding: 8px 10px; }
+  .app .ans .lbl { color: #9a6a00; opacity: 1; }
+  .app .ans b { font-size: 17px; display: block; line-height: 1.15; margin-top: 4px; }
+  .app.wide .ans b { font-size: 24px; }
+  .app .nextprev { background: #1a2450; border: 2px solid #f2c12e; border-radius: 10px; padding: 8px; display: grid; gap: 6px; }
+  .app .nextprev .img { aspect-ratio: 4 / 3; border-radius: 6px; background: linear-gradient(180deg, #4f86d8, #2c5aa8); display: grid; place-items: end center; overflow: hidden; }
+  .app .nextprev .img svg { width: 70%; }
+  .app .cardw { background: #fff; border-radius: 12px; padding: 10px; display: grid; gap: 6px; }
+  .app .cardw h6 { margin: 0; font-size: 11px; letter-spacing: 0.08em; color: #5b6485; display: flex; justify-content: space-between; align-items: center; }
+  .app .cardw h6 span { font-size: 12px; letter-spacing: 0; color: #0f1733; border: 1px solid #d6dcec; border-radius: 7px; padding: 4px 8px; font-weight: 600; }
+  .app .prow { display: grid; grid-template-columns: 34px 1fr 36px 36px 64px; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; padding: 3px 4px; border-radius: 8px; }
+  .app .prow.q { background: #e3f6ea; }
+  .app .badge { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; border: 1px solid #cfd6ea; color: #3b4468; background: #fff; }
+  .app .badge.q1 { background: #1c9a58; color: #fff; border-color: #1c9a58; }
+  .app .tb { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; }
+  .app .tb.ok { background: #1c9a58; }
+  .app .tb.no { background: #e25555; }
+  .app .tb svg { width: 18px; height: 18px; }
+  .app .score { border: 1px solid #d6dcec; border-radius: 7px; height: 32px; display: flex; align-items: center; padding: 0 8px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .app .price { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr 1fr; border-radius: 8px; overflow: hidden; height: 38px; font-size: 14px; font-weight: 600; }
+  .app .price span { display: grid; place-items: center; background: #2f6bff; color: #fff; border-right: 1px solid rgba(255, 255, 255, 0.2); }
+  .app .price span.v { background: #fff; color: #0f1733; border: 1px solid #d6dcec; justify-items: start; padding-left: 10px; }
+
+  .app .next {
+    background: #2f6bff; color: #fff; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-weight: 700; font-size: 18px; box-shadow: 0 8px 18px -8px rgba(47, 107, 255, 0.8);
+  }
+  .app .next svg { width: 26px; height: 26px; }
+  .app .next small { font-weight: 500; font-size: 13px; opacity: 0.85; }
+  .app .bottombar { position: absolute; left: 0; right: 0; bottom: 0; background: #0f1f4d; padding: 10px 12px 14px; display: flex; gap: 10px; align-items: stretch; box-shadow: 0 -8px 20px -10px rgba(0, 0, 0, 0.5); z-index: 3; }
+  .app .bottombar .next { flex: 1; min-height: 58px; }
+  .app.wide .bottombar { left: 12px; right: 364px; bottom: 12px; border-radius: 14px; }
+  .app .who { color: #fff; display: grid; align-content: center; font-size: 12px; min-width: 0; }
+  .app .who b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .app .judge { width: 58px; border-radius: 12px; display: grid; place-items: center; color: #fff; flex: none; }
+  .app .judge svg { width: 26px; height: 26px; }
+  .app .judge.ok { background: #1c9a58; }
+  .app .judge.no { background: #e25555; }
+  .app .fab { position: absolute; right: 18px; bottom: 22px; width: 72px; height: 72px; border-radius: 50%; z-index: 3; }
+  .app .fab .tag { position: absolute; right: 80px; top: 50%; transform: translateY(-50%); background: #0f1f4d; color: #fff; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
+  .app.left .fab { right: auto; left: 18px; }
+  .app.left .fab .tag { right: auto; left: 80px; }
+  .app.wide .fab { right: 380px; bottom: 28px; width: 84px; height: 84px; }
+  .app.wide .fab svg { width: 32px; height: 32px; }
+  .app .rail { width: 112px; flex: none; display: flex; flex-direction: column; gap: 10px; }
+  .app .rail .next { flex: 1; flex-direction: column; font-size: 16px; text-align: center; padding: 8px; }
+  .app .rail .next svg { width: 34px; height: 34px; }
+  .app .rail .who { color: #0f1733; background: #fff; border-radius: 12px; padding: 8px 10px; }
+  .app .rail .who b { font-size: 15px; }
+  .app .rail .judge { width: auto; height: 76px; gap: 6px; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .app .actrow { display: flex; gap: 10px; align-items: stretch; background: rgba(0, 0, 0, 0.18); border-radius: 12px; padding: 8px; }
+  .app .actrow .who { padding: 0 6px; }
+  .app .actrow .judge { min-height: 56px; }
+  .app .actrow .next { flex: 1; }
+  .app .corner { position: absolute; bottom: 18px; z-index: 3; display: flex; gap: 10px; }
+  .app .corner.r { right: 14px; }
+  .app .corner.l { left: 14px; }
+  .app .corner .next { height: 64px; padding: 0 22px; border-radius: 32px; }
+  .app .corner .ib { width: 58px; height: 58px; border-radius: 50%; background: #0f1f4d; }
+  .app .inflow { min-height: 56px; }
+  .app.wide .inflow { min-height: 64px; font-size: 20px; }
+  .app .kbd { font-size: 11px; font-weight: 600; background: rgba(255, 255, 255, 0.2); border-radius: 5px; padding: 2px 6px; }
+
+  .zones { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  .zones .z { position: absolute; border-radius: 50%; }
+  .zones .ring { position: absolute; font: 600 12px var(--body); color: #0b0f1d; background: rgba(255, 255, 255, 0.85); padding: 2px 6px; border-radius: 6px; }
+
+  @media (max-width: 860px) {
+    .explain { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Где держать кнопку «Далее» на пульте ведущего</h1>
+    <p>Сейчас стрелка «Далее» стоит в правом верхнем углу — до неё трудно дотянуться большим пальцем, когда телефон или планшет в руках, и далеко вести курсор на компьютере. Ниже пять вариантов на экране вопроса, как в игре: телефон, планшет в руках и ноутбук.</p>
+    <div class="controls">
+      <div class="tabs" role="group" aria-label="Вариант">
+        <button type="button" class="tab" id="tab-A" data-v="A" aria-pressed="true"><b>A</b>Нижняя панель</button>
+        <button type="button" class="tab" id="tab-B" data-v="B" aria-pressed="false"><b>B</b>Плавающая кнопка</button>
+        <button type="button" class="tab" id="tab-C" data-v="C" aria-pressed="false"><b>C</b>Панель действий</button>
+        <button type="button" class="tab" id="tab-D" data-v="D" aria-pressed="false"><b>D</b>Под большие пальцы</button>
+        <button type="button" class="tab" id="tab-E" data-v="E" aria-pressed="false"><b>E</b>Под экраном</button>
+      </div>
+      <label class="switch" for="zones"><input type="checkbox" id="zones">Показать зоны большого пальца</label>
+      <label class="switch" for="lefty"><input type="checkbox" id="lefty">Для левой руки</label>
+    </div>
+  </header>
+
+  <section class="stage" id="stage" aria-label="Макеты на устройствах"></section>
+
+  <section class="explain">
+    <div class="card" id="about"></div>
+    <div class="card">
+      <h2>Общее для всех вариантов</h2>
+      <ul>
+        <li>На кнопке написано, что произойдёт: «Показать ответ», «К табло», «Следующая страница», «Следующий раунд» — а не только стрелка.</li>
+        <li>Кнопка крупная: не меньше 56 px в высоту на телефоне и планшете.</li>
+        <li>Вверху остаются название экрана и прогресс — это информация, а не управление.</li>
+        <li>На компьютере можно добавить горячую клавишу (например, <b>PageDown</b>), исключив её из клавиш игроков, чтобы не пересечься с кнопками-«пищалками».</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Вариант</th><th>Телефон одной рукой</th><th>Планшет двумя руками</th><th>Компьютер</th><th>Риск случайного нажатия</th><th>Место на экране</th><th>Работы</th></tr>
+      </thead>
+      <tbody id="compare"></tbody>
+    </table>
+  </div>
+  <p class="note">Оценки — ●●● хорошо, ●●○ средне, ●○○ плохо. «Работы» — сколько менять в вёрстке пульта: ●○○ немного, ●●● заметно.</p>
+</div>
+
+<script>
+  const ICON = {
+    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+    next: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 5l7 7-7 7"/></svg>',
+    ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    no: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    up: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 21h4V9H2v12zm20-11a2 2 0 0 0-2-2h-6.3l1-4.6v-.3a1.5 1.5 0 0 0-.4-1L13.2 1 6.6 7.6A2 2 0 0 0 6 9v10a2 2 0 0 0 2 2h9a2 2 0 0 0 1.8-1.2l3-7.1a2 2 0 0 0 .2-.7v-2z"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 3h-4v12h4V3zM2 14a2 2 0 0 0 2 2h6.3l-1 4.6v.3a1.5 1.5 0 0 0 .4 1l1.1 1.1 6.6-6.6A2 2 0 0 0 18 15V5a2 2 0 0 0-2-2H7a2 2 0 0 0-1.8 1.2l-3 7.1a2 2 0 0 0-.2.7v2z"/></svg>',
+    target: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
+    repeat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>',
+    stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+    disc: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="#1b2f86" stroke="#f2d27a" stroke-width="4"/><path d="M52 24v30" stroke="#f2d27a" stroke-width="6" stroke-linecap="round"/><path d="M52 24h14v10H52z" fill="#f2d27a"/><circle cx="45" cy="56" r="8" fill="#f2d27a"/><g fill="#f2d27a"><rect x="30" y="66" width="5" height="12" rx="2"/><rect x="38" y="62" width="5" height="16" rx="2"/><rect x="46" y="68" width="5" height="10" rx="2"/><rect x="54" y="64" width="5" height="14" rx="2"/><rect x="62" y="70" width="5" height="8" rx="2"/></g></svg>',
+    person: '<svg viewBox="0 0 100 80"><circle cx="50" cy="30" r="16" fill="#e8c7a8"/><path d="M32 22c4-12 32-14 38 0l2 6H30z" fill="#1f2b44"/><path d="M14 80c4-22 18-30 36-30s32 8 36 30z" fill="#6f7c92"/><path d="M44 52l6 14 6-14z" fill="#fff"/></svg>',
+  }
+
+  const DEVICES = [
+    { id: 'phone', label: 'Телефон · 390×844', w: 390, h: 844, s: 0.44, r: 30, pad: 8 },
+    { id: 'tablet', label: 'Планшет · 1024×768', w: 1024, h: 768, s: 0.38, r: 26, pad: 10 },
+    { id: 'laptop', label: 'Ноутбук · 1440×900', w: 1440, h: 900, s: 0.3, r: 12, pad: 8 },
+  ]
+
+  const VARIANTS = {
+    A: {
+      name: 'Нижняя панель',
+      idea: 'Во всю ширину внизу — тёмная панель с большой кнопкой «Показать ответ» и меню. Самый привычный мобильный шаблон: кнопка там, где лежит большой палец.',
+      where: { phone: 'внизу во всю ширину', tablet: 'внизу под экраном вопроса', laptop: 'внизу рабочей области, рядом с таблицей игроков' },
+      pros: ['Достаётся большим пальцем любой руки', 'Очень заметна и не перекрывает контент сверху', 'Легко сделать: панель закреплена внизу'],
+      cons: ['Отъедает ~80 px высоты на телефоне', 'На планшете, который держат за края, до середины низа тянуться дальше, чем до углов'],
+      score: [3, 2, 3, 3, 2, 1],
+    },
+    B: {
+      name: 'Плавающая кнопка',
+      idea: 'Круглая крупная кнопка висит в правом нижнем углу над контентом, рядом подпись, что она сделает. Можно переключить на левую руку.',
+      where: { phone: 'правый нижний угол', tablet: 'правый нижний угол', laptop: 'нижний правый угол рабочей области' },
+      pros: ['Минимум места', 'Попадает прямо под большой палец правой (или левой) руки', 'Хорошо видна на любом экране'],
+      cons: ['Может закрыть часть контента под собой', 'Нужна настройка для левшей', 'Подпись рядом с кругом иногда мешает'],
+      score: [3, 2, 2, 2, 3, 1],
+    },
+    C: {
+      name: 'Панель действий',
+      idea: 'Нижняя панель собирает всё, что нужно в моменте: кто отвечает, «Верно» и «Неверно» для него и «Далее». Её содержимое меняется от экрана к экрану: на табло — «Выберите вопрос», на итогах — «Следующий раунд».',
+      where: { phone: 'внизу: игрок, ✓, ✕, «Далее»', tablet: 'внизу под экраном вопроса', laptop: 'внизу рабочей области' },
+      pros: ['Самые частые действия ведущего в одном месте под пальцем', 'Не нужно искать игрока в таблице, чтобы засчитать ответ', 'Понятно, что сейчас происходит'],
+      cons: ['Больше всего работы: панель зависит от экрана', 'Три кнопки рядом — нужно следить, чтобы не промахнуться', 'Таблица игроков дублирует часть действий'],
+      score: [3, 2, 3, 2, 2, 3],
+    },
+    D: {
+      name: 'Под большие пальцы',
+      idea: 'Для планшета в двух руках: у правого края — кто отвечает, «Верно», «Неверно» и высокая кнопка «Далее». Меню, повтор и отмена вопроса остаются на обычных местах. На телефоне — как в C: нижняя панель с игроком, ✓, ✕ и «Далее».',
+      where: { phone: 'как в C: нижняя панель с игроком, ✕, ✓ и «Далее»', tablet: 'правый край: отвечающий, ✓, ✕, «Далее»', laptop: 'правый край рабочей области' },
+      pros: ['Всё, что нужно по ходу вопроса, под правым большим пальцем на планшете', 'Кнопки огромные, промахнуться сложно', 'Меню и редкие действия не мешают — они на привычных местах', 'На телефоне то же удобство, что у C'],
+      cons: ['Полоса у края забирает ~120 px ширины на ноутбуке', 'На ноутбуке правый край далеко от превью вопроса', 'Разное расположение на телефоне и планшете'],
+      score: [3, 3, 2, 3, 2, 2],
+    },
+    E: {
+      name: 'Под экраном',
+      idea: 'Под превью «На экране» — строка действий: кто отвечает, ✕, ✓ и «Показать ответ». В отличие от C строка не закреплена внизу, а прокручивается вместе с карточкой вопроса — рядом с тем, что она меняет. На компьютере — ещё клавиша PageDown.',
+      where: { phone: 'под превью, в потоке страницы', tablet: 'под превью экрана', laptop: 'под превью + клавиша PageDown' },
+      pros: ['Действия рядом с экраном, который они переключают', 'Ничего не перекрывает контент', 'Удобно на ноутбуке, особенно с клавишей'],
+      cons: ['На телефоне после прокрутки к таблице игроков строка уходит из вида', 'Не в зоне большого пальца, если карточка вопроса наверху', 'Похож на C, но без закрепления внизу'],
+      score: [2, 2, 3, 3, 3, 2],
+    },
+  }
+
+  const state = { v: 'A', zones: false, lefty: false }
+  try {
+    const saved = JSON.parse(localStorage.getItem('sigame.nextMockups') || '{}')
+    if (saved.v && VARIANTS[saved.v]) state.v = saved.v
+  } catch {}
+  const fromHash = (location.hash || '').replace('#', '').toUpperCase()
+  if (VARIANTS[fromHash]) state.v = fromHash
+
+  const bars = (wide) => `<div class="bars">
+      <span>Игра</span><span class="bar"><i style="width:100%"></i></span><span>1/1</span>
+      <span>Раунд</span><span class="bar"><i style="width:3%"></i></span><span>3/110</span>
+      <span>Вопрос</span><span class="bar"><i style="width:50%"></i></span><span>1/2</span>
+    </div>`
+
+  const header = (dev, v) => {
+    const gear = !((v === 'A' || v === 'C' || v === 'D') && dev.id === 'phone') ? `<span class="ib">${ICON.gear}</span>` : ''
+    const spacer = gear ? '<span style="width:46px;flex:none"></span>' : ''
+    return `<div class="hdr">${gear}<div class="mid"><span class="t">Вопрос</span>${bars(dev.id !== 'phone')}</div>${spacer}</div>`
+  }
+
+  const nextBtn = (cls = '', label = 'Показать ответ') => `<span class="next ${cls}">${label} ${ICON.next}</span>`
+
+  const stage = (dev, v) => `<div class="stagecard">
+      <div class="chips"><span>Тема: <b>«Нью-Йоркские» песни</b></span><span>Цена: <b>67</b></span><span>Тип: <b>Обычный</b></span></div>
+      <div class="grid2">
+        <div class="screen">
+          <div class="lbl"><span>НА ЭКРАНЕ</span><span>стр. 1/2</span></div>
+          <div class="disc">${ICON.disc}</div>
+          <div class="player">▶<span class="line"></span>0:00 / 0:16</div>
+        </div>
+        <div class="answers">
+          <div class="ans"><div class="lbl"><span>ПРАВИЛЬНЫЙ ОТВЕТ</span></div><b>Frank Sinatra — New York, New York</b></div>
+          <div class="nextprev"><div class="lbl"><span>ДАЛЕЕ: ОТВЕТ</span></div><div class="img">${ICON.person}</div></div>
+        </div>
+      </div>
+      ${v === 'E' ? `<div class="actrow">
+        <span class="who"><span>Отвечает</span><b>Анна</b></span>
+        <span class="judge no">${ICON.no}</span><span class="judge ok">${ICON.ok}</span>
+        <span class="next inflow">${dev.id === 'phone' ? 'Ответ' : 'Показать ответ'} ${ICON.next}${dev.id === 'laptop' ? ' <span class="kbd">PageDown</span>' : ''}</span>
+      </div>` : ''}
+    </div>`
+
+  const players = () => {
+    const rows = [
+      { n: 'Анна', b: '1', q: true, s: 0 },
+      { n: 'Константин Константинопольский', b: '', q: false, s: 0 },
+      { n: 'Ира', b: '', q: false, s: 0 },
+      { n: 'Макс', b: '', q: false, s: 0 },
+    ]
+    return `<div class="cardw">
+      <h6>ИГРОКИ <span>Верно / неверно</span></h6>
+      ${rows.map(r => `<div class="prow${r.q ? ' q' : ''}">
+        <span class="badge${r.b ? ' q1' : ''}">${r.b || ICON.target}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.n}</span>
+        <span class="tb ok">${ICON.up}</span><span class="tb no">${ICON.down}</span>
+        <span class="score">${r.s}</span>
+      </div>`).join('')}
+    </div>`
+  }
+
+  const price = () => `<div class="cardw"><h6>ЦЕНА ВОПРОСА</h6><div class="price"><span>−20</span><span>−100</span><span class="v">67</span><span>+100</span><span>+20</span></div></div>`
+
+  const extras = (dev, v, lefty) => {
+    if (v === 'A') {
+      return `<div class="bottombar">${dev.id === 'phone' ? `<span class="ib">${ICON.gear}</span>` : ''}${nextBtn()}</div>`
+    }
+    if (v === 'B') {
+      return `<span class="next fab"><span class="tag">Показать ответ</span>${ICON.next}</span>`
+    }
+    if (v === 'C' || (v === 'D' && dev.id === 'phone')) {
+      return `<div class="bottombar">${dev.id === 'phone' ? `<span class="ib">${ICON.gear}</span>` : ''}
+        <span class="who"><span>Отвечает</span><b>Анна</b></span>
+        <span class="judge no">${ICON.no}</span><span class="judge ok">${ICON.ok}</span>
+        ${nextBtn('', dev.id === 'phone' ? 'Ответ' : 'Показать ответ')}</div>`
+    }
+    return ''
+  }
+
+  const zones = (dev, v, lefty) => {
+    if (dev.id === 'phone') {
+      const side = lefty ? 'left:-160px' : 'right:-160px'
+      return `<div class="zones">
+        <span class="z" style="${side};bottom:-230px;width:640px;height:640px;background:radial-gradient(circle, rgba(46,204,113,0.42) 0 38%, rgba(241,196,15,0.30) 38% 62%, rgba(231,76,60,0.18) 62% 100%)"></span>
+        <span class="ring" style="${lefty ? 'left' : 'right'}:16px;bottom:120px">легко</span>
+        <span class="ring" style="${lefty ? 'left' : 'right'}:40px;bottom:300px">тянуться</span>
+        <span class="ring" style="${lefty ? 'right' : 'left'}:16px;top:14px">трудно</span>
+      </div>`
+    }
+    if (dev.id === 'tablet') {
+      const g = 'radial-gradient(circle, rgba(46,204,113,0.42) 0 45%, rgba(241,196,15,0.26) 45% 70%, transparent 70%)'
+      return `<div class="zones">
+        <span class="z" style="left:-190px;top:230px;width:420px;height:420px;background:${g}"></span>
+        <span class="z" style="right:-190px;top:230px;width:420px;height:420px;background:${g}"></span>
+        <span class="ring" style="left:12px;top:420px">левый палец</span>
+        <span class="ring" style="right:12px;top:420px">правый палец</span>
+      </div>`
+    }
+    return `<div class="zones"><span class="ring" style="left:50%;top:48%;transform:translateX(-50%)">курсор и клавиатура — важнее близость к таблице игроков</span></div>`
+  }
+
+  const app = (dev, v, opts) => {
+    const wide = dev.id !== 'phone'
+    const hasBar = v === 'A' || v === 'C'
+    const cls = `app ${wide ? 'wide' : 'narrow'}${opts.lefty ? ' left' : ''}${hasBar ? ' has-bar' : ''}`
+    const main = `<div class="main">${stage(dev, v)}${wide ? '' : players() + price()}</div>`
+    const side = wide ? `<div class="side">${players()}${price()}</div>` : ''
+    let body
+    if (v === 'D' && wide) {
+      const rail = `<div class="rail"><span class="who"><span>Отвечает</span><b>Анна</b></span>
+        <span class="judge ok">${ICON.ok} Верно</span><span class="judge no">${ICON.no} Неверно</span>
+        ${nextBtn('', 'Показать ответ')}</div>`
+      body = `<div class="body">${opts.lefty ? rail : ''}${main}${side}${opts.lefty ? '' : rail}</div>`
+    } else {
+      body = `<div class="body">${main}${side}</div>`
+    }
+    return `<div class="${cls}">${header(dev, v)}${body}${extras(dev, v, opts.lefty)}${opts.zones ? zones(dev, v, opts.lefty) : ''}</div>`
+  }
+
+  const dots = n => '●'.repeat(n) + `<span>${'○'.repeat(3 - n)}</span>`
+
+  const render = () => {
+    const stageEl = document.getElementById('stage')
+    stageEl.innerHTML = DEVICES.map(d => `<figure class="device" style="--w:${d.w};--h:${d.h};--r:${d.r};--pad:${d.pad};--s:${d.s}" data-base="${d.s}">
+        <div class="bezel"><div class="viewport"><div class="scaler">${app(d, state.v, state)}</div></div></div>
+        <figcaption>${d.label}</figcaption>
+      </figure>`).join('')
+    fit()
+    const v = VARIANTS[state.v]
+    document.getElementById('about').innerHTML = `<h2>${state.v}. ${v.name}</h2>
+      <p>${v.idea}</p>
+      <dl class="where"><dt>Телефон</dt><dd>${v.where.phone}</dd><dt>Планшет</dt><dd>${v.where.tablet}</dd><dt>Ноутбук</dt><dd>${v.where.laptop}</dd></dl>
+      <h3>Плюсы</h3><ul class="pros">${v.pros.map(p => `<li>${p}</li>`).join('')}</ul>
+      <h3>Минусы</h3><ul class="cons">${v.cons.map(p => `<li>${p}</li>`).join('')}</ul>`
+    document.getElementById('compare').innerHTML = Object.entries(VARIANTS).map(([k, x]) => `<tr data-active="${k === state.v}">
+        <td><b>${k}</b> · ${x.name}</td>${x.score.map((n, i) => `<td class="dots">${dots(i === 5 ? n : n)}</td>`).join('')}
+      </tr>`).join('')
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-pressed', String(t.dataset.v === state.v)))
+    try { localStorage.setItem('sigame.nextMockups', JSON.stringify({ v: state.v })) } catch {}
+  }
+
+  const fit = () => {
+    const avail = document.getElementById('stage').clientWidth
+    document.querySelectorAll('.device').forEach(el => {
+      const w = Number(getComputedStyle(el).getPropertyValue('--w'))
+      const base = Number(el.dataset.base)
+      const s = Math.min(base, (avail - 24) / w)
+      el.style.setProperty('--s', String(Math.max(0.18, s)))
+    })
+  }
+
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { state.v = t.dataset.v; render() }))
+  document.getElementById('zones').addEventListener('change', e => { state.zones = e.target.checked; render() })
+  document.getElementById('lefty').addEventListener('change', e => { state.lefty = e.target.checked; render() })
+  window.addEventListener('resize', fit)
+  render()
+</script>

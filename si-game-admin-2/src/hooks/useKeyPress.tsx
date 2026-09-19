@@ -17,7 +17,7 @@ type ContextType = [boolean, SetIsEnable]
 
 const KeyPressContext = React.createContext<ContextType | null>(null);
 
-const isEditableTarget = (target: EventTarget | null): boolean => {
+export const isEditableTarget = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) {
         return false
     }
@@ -28,6 +28,11 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
 const MODIFIER_KEYS = new Set(['Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'Super', 'Hyper', 'Shift'])
 
 export const NO_BUZZER_ATTRIBUTE = 'data-no-buzzer'
+
+export const NEXT_KEY = 'PageDown'
+
+export const isNextKey = (code: string, key?: string): boolean =>
+    code === NEXT_KEY || (key === NEXT_KEY && !code.startsWith('Numpad'))
 
 const ACTIVATION_KEYS = new Set(['Enter', ' '])
 
@@ -47,7 +52,7 @@ export const KeyPressProvider: React.FC<PropsWithChildren> = ({ children }) => {
 
     useEffect(() => {
         const keyDownHandler = (e: globalThis.KeyboardEvent) => {
-            if (!isEnableRef.current || e.repeat || isShortcut(e) || isEditableTarget(e.target) || activatesControl(e)) {
+            if (!isEnableRef.current || e.repeat || isNextKey(e.code, e.key) || isShortcut(e) || isEditableTarget(e.target) || activatesControl(e)) {
                 return
             }
             client.keyPress(e.key, e.code)

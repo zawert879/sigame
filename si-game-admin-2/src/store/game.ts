@@ -45,6 +45,7 @@ type GameData = {
   results: PayloadStartResults | null
   players: PlayerView[]
   currentSelector: string | null
+  answeredBy: string | null
   scoreValue: number
   progress: GameProgress | null
   isLastRound: boolean
@@ -93,6 +94,7 @@ const initialData = (gameId: string | null): GameData => ({
   results: null,
   players: [],
   currentSelector: null,
+  answeredBy: null,
   scoreValue: 0,
   progress: null,
   isLastRound: false,
@@ -108,6 +110,25 @@ const questionPageOf = (question: PayloadStartQuestion): PayloadQuestionPage => 
   pageIndex: question.pageIndex,
   pagesCount: question.pagesCount,
 })
+
+const answeredByAfter = (state: GameData, update: EventUpdatePlayers): string | null => {
+  if (state.screen !== Screen.Question) {
+    return null
+  }
+  let answeredBy = state.answeredBy
+  for (const patch of update.updated) {
+    const before = state.players.find(player => player.id === patch.id)
+    if (!before) {
+      continue
+    }
+    if (patch.win > before.win && patch.id === update.currentSelector) {
+      answeredBy = patch.id
+    } else if (patch.id === answeredBy && patch.lose > before.lose) {
+      answeredBy = null
+    }
+  }
+  return answeredBy && update.removed.includes(answeredBy) ? null : answeredBy
+}
 
 export const useGameStore = create<GameState>()((set) => ({
   ...initialData(null),
@@ -134,6 +155,7 @@ export const useGameStore = create<GameState>()((set) => ({
       screen: screenData.screen,
       scoreValue: game.score,
       progress: game.progress,
+      answeredBy: null,
       media: null,
     }
     let currentSelector = state.currentSelector
@@ -177,6 +199,7 @@ export const useGameStore = create<GameState>()((set) => ({
     question: payload,
     questionPage: questionPageOf(payload),
     currentSelector: payload.currentSelector,
+    answeredBy: null,
     players: withCurrent(state.players, payload.currentSelector),
     animatedQuestionId: null,
     questionRun: state.questionRun + 1,
@@ -212,10 +235,15 @@ export const useGameStore = create<GameState>()((set) => ({
     players: withCurrent(payload.players, state.currentSelector),
   })),
 
-  updateQuestionPage: (payload) => set({ questionPage: payload, media: null }),
+  updateQuestionPage: (payload) => set((state) => ({
+    questionPage: payload,
+    answeredBy: payload.pageIndex === 0 ? null : state.answeredBy,
+    media: null,
+  })),
 
   updatePlayers: (update) => set((state) => ({
     currentSelector: update.currentSelector,
+    answeredBy: answeredByAfter(state, update),
     players: withCurrent(mergePlayers(state.players, update), update.currentSelector),
   })),
 
