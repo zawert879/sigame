@@ -32,8 +32,7 @@ type ContextType = [PlaySound]
 
 const SoundContext = React.createContext<ContextType | null>(null);
 
-// eslint-disable-next-line react/display-name
-export const SoundProvider: React.FC<PropsWithChildren> = memo(({ children }) => {
+export const SoundProvider: React.FC<PropsWithChildren> = memo(function SoundProvider({ children }) {
     const volume = toMediaVolume(useGameStore(state => state.settings?.playerVolume))
     const volumeRef = useRef(volume)
     volumeRef.current = volume

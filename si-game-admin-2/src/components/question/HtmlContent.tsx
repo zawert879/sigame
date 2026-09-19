@@ -17,7 +17,7 @@ export const HtmlContent: FC<{ page: PageSnapshotType; gameId: string | null; cl
       title="HTML"
       sandbox=""
       referrerPolicy="no-referrer"
-      className={`w-full h-full border-0 bg-white ${className ?? ""}`}
+      className={`block w-full h-full border-0 bg-white ${className ?? ""}`}
       {...source}
     />
   );

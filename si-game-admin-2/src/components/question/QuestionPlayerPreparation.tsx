@@ -4,12 +4,8 @@ import { PayloadStartQuestion } from "@/types";
 
 export const QuestionPlayerPreparation: FC<{ question: PayloadStartQuestion }> = ({ question }) => {
   return (
-    <div className="w-screen h-screen">
-      <div
-        className={`bg-blue-700 h-[90vh] w-full p-8 text-center text-white flex justify-center items-center shadow-[0_0_400px_230px_rgba(0,0,0,0.40)_inset]`}
-      >
-        <QuestionType text={question.type} />
-      </div>
+    <div className="h-full w-full tv-stage px-[6vw] py-[6vh]">
+      <QuestionType text={question.type} className="text-[length:min(24vh,14vw)]" />
     </div>
   );
 };

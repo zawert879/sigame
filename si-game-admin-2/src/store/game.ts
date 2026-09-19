@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { Screen } from "@/data"
 import type {
+  EventUpdateMediaPlayer,
   EventUpdatePlayers,
   GameProgress,
   PayloadQuestionPage,
@@ -27,6 +28,8 @@ export type GameMeta = {
 
 export type LoadStatus = 'idle' | 'loading' | 'ready' | 'notFound' | 'error'
 
+export type MediaState = EventUpdateMediaPlayer & { receivedAt: number }
+
 type GameData = {
   gameId: string | null
   status: LoadStatus
@@ -48,6 +51,7 @@ type GameData = {
   settings: ResponseGetSettings | null
   animatedQuestionId: string | null
   questionRun: number
+  media: MediaState | null
 }
 
 type GameActions = {
@@ -68,6 +72,8 @@ type GameActions = {
   setSettings: (settings: ResponseGetSettings) => void
   setAnimatedQuestion: (questionId: string | null) => void
   restartQuestionMedia: () => void
+  updateMeta: (game: Pick<ResponseGetGame, 'gameId' | 'gameName' | 'packageName'>) => void
+  setMedia: (media: EventUpdateMediaPlayer) => void
 }
 
 export type GameState = GameData & GameActions
@@ -93,6 +99,7 @@ const initialData = (gameId: string | null): GameData => ({
   settings: null,
   animatedQuestionId: null,
   questionRun: 0,
+  media: null,
 })
 
 const questionPageOf = (question: PayloadStartQuestion): PayloadQuestionPage => ({
@@ -127,6 +134,7 @@ export const useGameStore = create<GameState>()((set) => ({
       screen: screenData.screen,
       scoreValue: game.score,
       progress: game.progress,
+      media: null,
     }
     let currentSelector = state.currentSelector
     switch (screenData.screen) {
@@ -162,7 +170,7 @@ export const useGameStore = create<GameState>()((set) => ({
     return next
   }),
 
-  startScreensaver: () => set({ screen: Screen.Screensaver }),
+  startScreensaver: () => set({ screen: Screen.Screensaver, media: null }),
 
   startQuestion: (payload, screen) => set((state) => ({
     screen,
@@ -172,35 +180,39 @@ export const useGameStore = create<GameState>()((set) => ({
     players: withCurrent(state.players, payload.currentSelector),
     animatedQuestionId: null,
     questionRun: state.questionRun + 1,
+    media: null,
   })),
 
   startRoundName: (payload) => set({
     screen: Screen.RoundName,
     roundName: payload,
     progress: payload.progress,
+    media: null,
   }),
 
   startTable: (payload) => set((state) => ({
     screen: Screen.Table,
     table: payload,
+    media: null,
     progress: payload.progress,
     currentSelector: payload.currentSelector,
     players: withCurrent(state.players, payload.currentSelector),
   })),
 
-  startThemeList: (payload) => set({ screen: Screen.ThemeList, themeList: payload }),
+  startThemeList: (payload) => set({ screen: Screen.ThemeList, themeList: payload, media: null }),
 
-  startThemeListInRound: (payload) => set({ screen: Screen.ThemeListInRound, themeListInRound: payload }),
+  startThemeListInRound: (payload) => set({ screen: Screen.ThemeListInRound, themeListInRound: payload, media: null }),
 
   startResults: (payload) => set((state) => ({
     screen: Screen.Results,
     results: payload,
+    media: null,
     isLastRound: payload.isLastRound,
     progress: payload.progress,
     players: withCurrent(payload.players, state.currentSelector),
   })),
 
-  updateQuestionPage: (payload) => set({ questionPage: payload }),
+  updateQuestionPage: (payload) => set({ questionPage: payload, media: null }),
 
   updatePlayers: (update) => set((state) => ({
     currentSelector: update.currentSelector,
@@ -216,8 +228,19 @@ export const useGameStore = create<GameState>()((set) => ({
 
   setAnimatedQuestion: (animatedQuestionId) => set({ animatedQuestionId }),
 
-  restartQuestionMedia: () => set((state) => ({ questionRun: state.questionRun + 1 })),
+  restartQuestionMedia: () => set((state) => ({ questionRun: state.questionRun + 1, media: null })),
+
+  updateMeta: (game) => set((state) => (
+    state.meta && state.meta.gameId === game.gameId
+      ? { meta: { ...state.meta, gameName: game.gameName, packageName: game.packageName } }
+      : {}
+  )),
+
+  setMedia: (media) => set({ media: { time: media.time, isPlaying: media.isPlaying, receivedAt: Date.now() } }),
 }))
+
+export const mediaPosition = (media: MediaState, now = Date.now()): number =>
+  media.isPlaying ? media.time + Math.max(0, now - media.receivedAt) / 1000 : media.time
 
 export const toMediaVolume = (value: number | null | undefined): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {

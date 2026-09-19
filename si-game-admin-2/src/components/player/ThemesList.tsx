@@ -1,35 +1,51 @@
-import { FC, useEffect, useState } from "react";
+import { FC } from "react";
+import { FitText } from "@/components/FitText";
+import { formatPageText } from "@/utils/utils";
+
+const STAGGER_MS = 90;
+const MAX_DELAY_MS = 2200;
+
+const columnsFor = (count: number): number => {
+  if (count <= 5) {
+    return 1;
+  }
+  if (count <= 12) {
+    return 2;
+  }
+  if (count <= 27) {
+    return 3;
+  }
+  if (count <= 48) {
+    return 4;
+  }
+  return 5;
+};
 
 const ThemesList: FC<{ themes: string[] }> = ({ themes }) => {
-  const [pos, setPos] = useState(10000)
-  const [isRun, setIsRun] = useState(true)
+  const columns = columnsFor(themes.length);
+  const rows = Math.max(1, Math.ceil(themes.length / columns));
 
-  useEffect(() => {
-    setPos(window.innerHeight)
-  }, [])
-
-  useEffect(() => {
-    if (isRun) {
-      setTimeout(() => {
-        setPos(pos - 1)
-        if (pos < -(themes.length * 60)) {
-          setIsRun(false)
-        }
-      }, 10)
-    }
-  }, [pos, isRun, themes.length])
-
-  return (<>
-    <div className='h-screen bg-blue-700 shadow-[0_0_400px_230px_rgba(0,0,0,0.40)_inset] border-solid border-2 border-blue-800 border-b-gray-700  flex justify-center items-center'>
-      <div className="flex flex-col h-screen w-full text-white text-6xl  overflow-hidden relative">
-        <div className={`w-full text-center absolute`} style={{ bottom: pos }}>
-          {themes.map((theme,index) =>
-            <p key={index} className="h-[60px]">{theme}</p>
-          )}
-        </div>
+  return (
+    <div className="h-full w-full tv-stage px-[3vw] py-[3vh]">
+      <div
+        className="grid h-full w-full gap-[1.2vmin]"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        }}
+      >
+        {themes.map((theme, index) => (
+          <div
+            key={index}
+            className="min-w-0 min-h-0 rounded-xl border border-white/25 bg-blue-950/35 px-[1.2vmin] py-[0.4vmin] animate-themeAppear"
+            style={{ animationDelay: `${Math.min(index * STAGGER_MS, MAX_DELAY_MS)}ms` }}
+          >
+            <FitText className="text-white text-[length:min(7vh,4.4vw)]">{formatPageText(theme)}</FitText>
+          </div>
+        ))}
       </div>
-    </div >
-  </>)
-}
+    </div>
+  );
+};
 
 export default ThemesList;

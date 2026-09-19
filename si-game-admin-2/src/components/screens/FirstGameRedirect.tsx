@@ -29,7 +29,7 @@ export const FirstGameRedirect: FC<{ route: RouteName }> = ({ route }) => {
   }, [openFirstGame])
 
   return (
-    <div className="bg-blue-700 h-[92vh] lg:h-[100vh] flex flex-col justify-center items-center w-screen text-white gap-4">
+    <div className="bg-blue-700 min-h-dvh flex flex-col justify-center items-center w-full px-4 text-center text-white gap-4">
       {state.status === 'loading' && <Spin size="large" />}
       {state.status === 'empty' && <h1 className="text-3xl">На сервере нет ни одной игры</h1>}
       {state.status === 'error' && (<>

@@ -30,47 +30,29 @@ export const ScoreManager: FC = () => {
   }, 450)
 
   return (
-    <>
+    <section aria-label="Цена вопроса" className="rounded-xl bg-white p-2 shadow-sm">
+      <h2 className="m-0 mb-1.5 px-1 text-sm font-bold uppercase tracking-wide text-slate-500">Цена вопроса</h2>
       <Space.Compact block>
-        <Button
-          type="primary"
-          block
-          size="large"
-          onClick={onLittleMinus}
-        >
+        <Button type="primary" block size="large" className="!px-1" onClick={onLittleMinus}>
           {`-${little}`}
         </Button>
-        <Button
-          type="primary"
-          block
-          size="large"
-          onClick={onBigMinus}
-        >
+        <Button type="primary" block size="large" className="!px-1" onClick={onBigMinus}>
           {`-${big}`}
         </Button>
         <InputNumber
           value={scoreValue}
           size="large"
-          className="!w-full"
+          aria-label="Цена вопроса"
+          className="!w-full min-w-[4.5rem]"
           onChange={onChange}
         />
-        <Button
-          type="primary"
-          block
-          size="large"
-          onClick={onBigPlus}
-        >
+        <Button type="primary" block size="large" className="!px-1" onClick={onBigPlus}>
           {`+${big}`}
         </Button>
-        <Button
-          type="primary"
-          block
-          size="large"
-          onClick={onLittlePlus}
-        >
+        <Button type="primary" block size="large" className="!px-1" onClick={onLittlePlus}>
           {`+${little}`}
         </Button>
       </Space.Compact>
-    </>
+    </section>
   );
 };

@@ -50,23 +50,17 @@ export const UploadPack: React.FC = () => {
     },
   };
   return (
-      <div className="w-full min-h-[200px] border-2 border-gray-200 rounded-2xl p-4 backdrop-blur-sm bg-white">
-          <Dragger height={200} {...props}>
-            <p className="ant-upload-drag-icon">
-              {
-                status === Statuses.Ready && ( <CloudUploadOutlined />)
-              }
-              {
-                status === Statuses.Uploading && ( <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />)
-              }
-            </p>
-            <p className="ant-upload-text">
-              Кликните или перетащите siq файл
-            </p>
-            <p className="ant-upload-hint">
-              Можно выбрать несколько паков .siq сразу
-            </p>
-          </Dragger>
-        </div>
+    <Dragger height={160} {...props}>
+      <p className="ant-upload-drag-icon">
+        {status === Statuses.Ready && <CloudUploadOutlined />}
+        {status === Statuses.Uploading && <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />}
+      </p>
+      <p className="ant-upload-text px-2">
+        Кликните или перетащите siq файл
+      </p>
+      <p className="ant-upload-hint px-2">
+        Можно выбрать несколько паков .siq сразу
+      </p>
+    </Dragger>
   );
 };

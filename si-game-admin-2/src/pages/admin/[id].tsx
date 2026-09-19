@@ -8,6 +8,3 @@ const AdminByIdPage = () => {
 }
 
 export default AdminByIdPage
-
-export const getStaticPaths = async () => ({ paths: [], fallback: false })
-export const getStaticProps = async () => ({ props: {} })

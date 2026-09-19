@@ -1,22 +1,12 @@
 import { Button, Divider, Flex, Modal } from "antd";
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback } from "react";
 import { PlayerInSetting } from "./PlayerInSetting";
 import { client } from "@/client";
 import { useGameStore } from "@/store/game";
 import { notifyError } from "@/utils/notify";
 
-// eslint-disable-next-line react/display-name
-export const PlayerSettingsModal: React.FC = memo(() => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export const PlayerSettingsModal: React.FC<{ open: boolean; onBack: () => void }> = memo(function PlayerSettingsModal({ open, onBack }) {
   const players = useGameStore(state => state.players)
-
-  const showModal = useCallback(() => {
-    setIsModalOpen(true);
-  }, []);
-
-  const handleCancel = useCallback(() => {
-    setIsModalOpen(false);
-  }, []);
 
   const onDeletePlayer = useCallback((playerId: string) => async () => {
     try {
@@ -54,15 +44,13 @@ export const PlayerSettingsModal: React.FC = memo(() => {
 
   return (
     <>
-      <Button type="primary" size="large" block onClick={showModal}>
-        Настройка игроков
-      </Button>
       <Modal
         title="Настройка игроков"
-        open={isModalOpen}
-        onCancel={handleCancel}
+        width={560}
+        open={open}
+        onCancel={onBack}
         footer={[
-          <Button block key="back" onClick={handleCancel}>
+          <Button block key="back" size="large" onClick={onBack}>
             Назад
           </Button>
         ]}
@@ -73,7 +61,7 @@ export const PlayerSettingsModal: React.FC = memo(() => {
           >
             Добавить игрока
           </Button>
-          <Divider />
+          <Divider className="!my-2" />
           {
             players.map(player => (
               <PlayerInSetting
@@ -86,7 +74,6 @@ export const PlayerSettingsModal: React.FC = memo(() => {
               />
             ))
           }
-          <Divider />
         </Flex>
       </Modal>
     </>

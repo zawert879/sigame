@@ -7,7 +7,7 @@ import { PlayerTable } from "@/components/admin/PlayerTable"
 import { Screensaver } from "@/components/admin/Screensaver"
 import ThemesList from "@/components/admin/ThemesList"
 import ThemeRound from "@/components/admin/ThemeRound"
-import { QuestionTable } from "@/components/QuestionTable"
+import { AdminTable } from "@/components/admin/AdminTable"
 import { QuestionAdmin } from "@/components/admin/QuestionAdmin"
 import { Results } from "@/components/Results"
 import { ConnectionBanner } from "@/components/ConnectionBanner"
@@ -15,6 +15,12 @@ import { GameStatusView } from "./GameStatusView"
 import { FirstGameRedirect } from "./FirstGameRedirect"
 import { useGameConnection } from "@/hooks/useGameConnection"
 import { useGameStore } from "@/store/game"
+import { screenTitle } from "@/utils/screens"
+
+const STAGE_HEIGHT: Partial<Record<Data.Screen, string>> = {
+  [Data.Screen.Screensaver]: "h-28 sm:h-40",
+  [Data.Screen.RoundName]: "h-40 sm:h-56",
+}
 
 export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> = ({ gameId, resolved }) => {
   const { refresh } = useGameConnection(gameId, 'admin')
@@ -45,32 +51,44 @@ export const AdminScreen: FC<{ gameId: string | undefined, resolved: boolean }> 
     )
   }
 
+  if (screen === Data.Screen.Initial) {
+    return (
+      <>
+        <ConnectionBanner />
+        <div className="min-h-dvh bg-blue-700 px-2 py-3 font-sans sm:px-6 sm:py-8">
+          <GameInit game={meta} />
+        </div>
+      </>
+    )
+  }
+
+  const stageHeight = (screen && STAGE_HEIGHT[screen]) ?? ""
+
   return (
     <>
       <ConnectionBanner />
-      {screen === Data.Screen.Initial && <div className="bg-blue-700 h-[92vh] lg:h-[100vh] flex flex-col justify-center items-center w-screen">
-        <GameInit game={meta} />
-      </div>}
-      {screen !== Data.Screen.Initial &&
-        <div className="overflow-hidden h-[92vh] lg:h-[100vh]">
-          <div className="flex justify-center">
-            <p className=" h-6 w-full text-center bg-yellow-300">{screen}</p>
-          </div>
-          <div className="h-[600px] bg-blue-700">
-            {screen === Data.Screen.Screensaver && <Screensaver />}
+      <div className="flex min-h-dvh flex-col bg-slate-200 font-sans lg:h-dvh lg:min-h-[36rem]">
+        <Menu refresh={refresh} />
+        <div className="flex flex-1 flex-col gap-2 p-2 sm:gap-3 sm:p-3 lg:min-h-0 lg:flex-row">
+          <main
+            aria-label={screenTitle(screen)}
+            className={`relative min-w-0 overflow-hidden rounded-xl bg-blue-800 text-white shadow-sm lg:h-auto lg:min-h-0 lg:flex-1 ${stageHeight}`}
+          >
+            {screen === Data.Screen.Screensaver && <Screensaver className="text-3xl sm:text-5xl lg:text-6xl" />}
             {screen === Data.Screen.ThemeList && themeList && <ThemesList themes={themeList.themes} />}
             {screen === Data.Screen.ThemeListInRound && themeListInRound && <ThemesList themes={themeListInRound.themes} />}
             {screen === Data.Screen.RoundName && roundName && <ThemeRound themeName={roundName.name} />}
-            {screen === Data.Screen.Table && table && <QuestionTable data={table} animateSelectQuestion={null} />}
+            {screen === Data.Screen.Table && table && <AdminTable data={table} />}
             {screen === Data.Screen.QuestionPreparation && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={true} />}
             {screen === Data.Screen.Question && question && questionPage && <QuestionAdmin question={question} pageData={questionPage} isPreparation={false} />}
             {screen === Data.Screen.Results && <Results players={players} isLastRound={isLastRound} compact />}
-          </div>
-          <Menu refresh={refresh} />
-          <ScoreManager />
-          <PlayerTable players={players} />
+          </main>
+          <aside aria-label="Управление игроками" className="flex shrink-0 flex-col gap-2 sm:gap-3 lg:min-h-0 lg:w-[23rem] lg:overflow-y-auto xl:w-[31rem] 2xl:w-[36rem]">
+            <PlayerTable players={players} />
+            <ScoreManager />
+          </aside>
         </div>
-      }
+      </div>
     </>
   )
 }

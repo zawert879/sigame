@@ -1,7 +1,7 @@
-import { Button, Space } from "antd";
-import { ChangeEvent, FC, KeyboardEvent, useCallback } from "react";
-import { Input } from "../override/Input";
-import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
+import { Button } from "antd";
+import { DeleteOutlined } from "@ant-design/icons";
+import { FC } from "react";
+import { PlayerKeyInput, PlayerNameInput } from "../initial/PlayerFields";
 
 export const PlayerInSetting: FC<{
   onDelete: () => void;
@@ -10,24 +10,11 @@ export const PlayerInSetting: FC<{
   name: string;
   keyboardKey: string;
 }> = ({ onDelete, onChangeName, onChangeKey, name, keyboardKey }) => {
-  const changeName = useDebouncedCallback(onChangeName, 450)
-  const handleChangeName = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    changeName(event.target.value)
-  }, [changeName])
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Tab') {
-      return
-    }
-    event.preventDefault()
-    onChangeKey(event.code)
-  }, [onChangeKey])
   return (
-    <Space.Compact>
-      <Input placeholder="Имя" defaultValue={name} onChange={handleChangeName} />
-      <Input placeholder="Кнопка" value={keyboardKey} onKeyDown={handleKeyDown} readOnly />
-      <Button type="primary" danger onClick={onDelete}>
-        Удалить
-      </Button>
-    </Space.Compact>
+    <div className="flex items-start gap-2">
+      <PlayerNameInput className="min-w-0 flex-1" name={name} onSave={onChangeName} />
+      <PlayerKeyInput code={keyboardKey} onChange={onChangeKey} />
+      <Button type="primary" danger className="shrink-0" aria-label="Удалить" title="Удалить" icon={<DeleteOutlined />} onClick={onDelete} />
+    </div>
   );
 };

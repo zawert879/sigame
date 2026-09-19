@@ -406,7 +406,7 @@ describe('Game: question controls', () => {
     expect(game.queuePlayersIds).toEqual([])
     expect(game.isButtonsActive).toBe(true)
     expect(recorder.of(GameEvent.UpdateMediaPlayer)).toEqual([[{ time: 0, isPlaying: true }]])
-    expect(recorder.names()).toEqual([GameEvent.QueuePlayersUpdated, GameEvent.UpdateMediaPlayer, GameEvent.UpdatePage])
+    expect(recorder.names()).toEqual([GameEvent.UpdateMediaPlayer, GameEvent.UpdatePage])
   })
 
   test('repeatQuestion keeps the buttons off for a special question', async () => {
@@ -551,6 +551,24 @@ describe('Game: players', () => {
     game.winPlayer('nope')
     game.losePlayer('nope')
     expect(game.currentSelector).toBe(petya.id)
+  })
+
+  test('a correct answer clears the queue and ignores later buzzers', async () => {
+    const game = await tableGame()
+    const vasya = addPlayer(game, 'Вася', 'KeyA')
+    const petya = addPlayer(game, 'Петя', 'KeyB')
+    const q100 = question(game, 100)
+    game.selectQuestion(q100.id)
+    game.playerUsedButton('KeyA')
+    game.playerUsedButton('KeyB')
+
+    game.winPlayer(vasya.id)
+    expect(game.queuePlayersIds).toEqual([])
+    expect(game.isButtonsActive).toBe(false)
+
+    game.playerUsedButton('KeyB')
+    expect(game.queuePlayersIds).toEqual([])
+    expect(game.playersWithQueue.find(p => p.id === petya.id)?.queue).toBeNull()
   })
 
   test('winPlayer shows the answer from its first page; the rest of a long answer follows with next', async () => {

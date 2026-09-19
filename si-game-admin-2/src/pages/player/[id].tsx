@@ -8,6 +8,3 @@ const PlayerByIdPage = () => {
 }
 
 export default PlayerByIdPage
-
-export const getStaticPaths = async () => ({ paths: [], fallback: false })
-export const getStaticProps = async () => ({ props: {} })

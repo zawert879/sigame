@@ -8,8 +8,7 @@ import { KeyPressProvider } from '@/hooks/useKeyPress'
 import { SoundProvider } from '@/hooks/useSound'
 import { MessageHolder } from '@/utils/notify'
 
-// eslint-disable-next-line react/display-name
-const App = memo(({ Component, pageProps }: AppProps) => {
+const App = memo(function App({ Component, pageProps }: AppProps) {
   return (
     <ConfigProvider theme={theme}>
       <MessageHolder />

@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { PackListItem } from "./PackListItem";
 import { notifyError } from "@/utils/notify";
 
-
 export const PackList: React.FC = () => {
   const { packs, fetchPacks } = usePacksStore()
   useEffect(() => {
@@ -12,8 +11,8 @@ export const PackList: React.FC = () => {
 
   if (packs.length === 0) return null
   return (
-    <div className="w-full min-h-80 border-2 border-gray-200 rounded-2xl p-4 mb-4 backdrop-blur-sm bg-white">
+    <ul className="m-0 mb-3 list-none p-0">
       {packs.map(pack => <PackListItem key={pack.file} pack={pack} />)}
-    </div>
+    </ul>
   );
 };

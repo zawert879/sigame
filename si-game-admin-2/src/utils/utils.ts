@@ -22,6 +22,9 @@ export const costToString = (data: { minimum: number; maximum: number; step: num
   if(data.type === CostType.STEP){
     return `от ${data.minimum} до ${data.maximum}, с шагом ${data.step}`
   }
+  if(data.type === CostType.MIN_OR_MAX_IN_ROUND){
+    return 'минимум или максимум в раунде'
+  }
   return ''
 }
 
@@ -52,4 +55,34 @@ export function convertToRoman(value: number) {
 
       return result;
   }, '');
+}
+
+export const pluralRu = (count: number, one: string, few: string, many: string): string => {
+  if (!Number.isInteger(count)) {
+    return few
+  }
+  const rest = Math.abs(count) % 100
+  if (rest >= 11 && rest <= 14) {
+    return many
+  }
+  const last = rest % 10
+  if (last === 1) {
+    return one
+  }
+  if (last >= 2 && last <= 4) {
+    return few
+  }
+  return many
+}
+
+export const formatScore = (score: number): string => `${score} ${pluralRu(score, 'очко', 'очка', 'очков')}`
+
+export const formatAnswerCounts = (win: number, lose: number): string =>
+  `${win} ${pluralRu(win, 'правильный', 'правильных', 'правильных')} · ${lose} ${pluralRu(lose, 'неверный', 'неверных', 'неверных')}`
+
+const SERVICE_DEFAULT_GAME_NAME = 'Default'
+
+export const displayGameName = (name: string | null | undefined): string => {
+  const trimmed = name?.trim() ?? ''
+  return trimmed && trimmed !== SERVICE_DEFAULT_GAME_NAME ? trimmed : 'Без названия'
 }

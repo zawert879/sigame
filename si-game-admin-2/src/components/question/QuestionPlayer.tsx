@@ -1,48 +1,40 @@
 import { FC } from "react";
-import { PayloadQuestionPage, PayloadStartQuestion } from "@/types";
-import { Page } from "./Page";
+import { PageSnapshotType, PayloadQuestionPage, PayloadStartQuestion } from "@/types";
+import { Page, pageHasMedia, pageText } from "./Page";
+import { AnswerOptions, answerOptionsLayout } from "./AnswerOptions";
 import { QuestionAnswerType } from "@/data";
 import { useGameStore } from "@/store/game";
-import { mediaUrl } from "@/utils/api";
+
+const pageWeight = (page: PageSnapshotType): number => {
+  if (pageHasMedia(page)) {
+    return 5;
+  }
+  const length = pageText(page).length;
+  if (length <= 60) {
+    return 2;
+  }
+  return length <= 200 ? 3 : 4.5;
+};
+
+const optionsWeight = (options: PayloadStartQuestion["answerGroup"]): number => {
+  const { hasImages, rows, longest } = answerOptionsLayout(options);
+  const perRow = hasImages ? 5 : longest <= 25 ? 1.6 : longest <= 60 ? 2.4 : 3.2;
+  return Math.min(8, rows * perRow);
+};
 
 export const QuestionPlayer: FC<{ question: PayloadStartQuestion, pageData: PayloadQuestionPage }> = ({ pageData, question }) => {
-  const gameId = useGameStore(state => state.gameId)
   const questionRun = useGameStore(state => state.questionRun)
+  const page = pageData.currentPage
+  const options = question.answerType === QuestionAnswerType.Group ? question.answerGroup : []
+
   return (
-    <div className="w-screen h-screen">
-      <div
-        className={`bg-blue-700 h-[90vh] w-full p-8 text-center text-white flex justify-center items-center shadow-[0_0_400px_230px_rgba(0,0,0,0.40)_inset]`}
-        style={{
-          fontSize: 'calc(1em + 4vw)'
-        }}
-      >
-        {
-          pageData.currentPage && (<>
-            <Page key={`${questionRun}-${pageData.pageIndex}`} page={pageData.currentPage} />
-            {question.answerType === QuestionAnswerType.Group && question.answerGroup.length > 0 && (
-              <div className="py-4 w-1/4 border-l-white border-l-2 ml-4 flex flex-col justify-around items-center">
-                {question.answerGroup.map((ag) => {
-                  return (
-                    <div key={ag.variant} className="flex items-center">
-                      {ag.variant}: {typeof ag.answer !== 'object' ? ag.answer : (<picture
-                        key="image"
-                        className=""
-                      >
-                        <img
-                          src={mediaUrl(gameId, 'Images', ag.answer["#text"])}
-                          alt="image"
-                          className="h-48 p-2"
-                        />
-                      </picture>)}
-                    </div>
-                  )
-                }
-                )}
-              </div>
-            )}
-          </>)
-        }
-      </div>
+    <div className="h-full w-full tv-stage text-white p-[2.5vmin] flex flex-col gap-[2.5vmin]">
+      {page && (<>
+        <div className="min-h-0 w-full" style={{ flex: `${options.length > 0 ? pageWeight(page) : 1} 1 0%` }}>
+          <Page key={`${questionRun}-${pageData.pageIndex}`} page={page} withOptions={options.length > 0} />
+        </div>
+        {options.length > 0 && <AnswerOptions options={options} style={{ flex: `${optionsWeight(options)} 1 0%` }} />}
+      </>)}
     </div>
   );
 };

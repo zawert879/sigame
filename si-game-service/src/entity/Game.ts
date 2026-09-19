@@ -438,6 +438,8 @@ export class Game {
 
     this._currentSelector = id
     player.win(this._score.value)
+    this._isButtonsActive = false
+    this._queuePlayers.clear()
     if (this._package?.currentQuestion?.goToAnswer()) {
       this._eventEmitter.emit(GameEvent.UpdatePage)
     }

@@ -1,5 +1,6 @@
-import { Button, Collapse, CollapseProps } from "antd"
-import { memo, useCallback, useMemo } from "react"
+import { Button } from "antd"
+import { UserAddOutlined } from "@ant-design/icons"
+import { memo, useCallback } from "react"
 import { GameInfo } from "../GameInfo";
 import { PackList } from "./PackList";
 import { UploadPack } from "../UploadPack";
@@ -8,8 +9,10 @@ import { client } from "@/client";
 import { useGameStore, type GameMeta } from "@/store/game";
 import { notifyError } from "@/utils/notify";
 
-// eslint-disable-next-line react/display-name
-export const GameInit: React.FC<{ game: GameMeta }> = memo(({ game }) => {
+const CARD = "min-w-0 rounded-2xl bg-white p-3 shadow-md sm:p-5"
+const TITLE = "m-0 mb-2 text-lg font-bold sm:text-xl"
+
+export const GameInit: React.FC<{ game: GameMeta }> = memo(function GameInit({ game }) {
   const players = useGameStore(state => state.players)
 
   const onDeletePlayer = useCallback(async (playerId: string) => {
@@ -28,31 +31,23 @@ export const GameInit: React.FC<{ game: GameMeta }> = memo(({ game }) => {
     }
   }, [])
 
-  const items: CollapseProps['items'] = useMemo(() => [
-    {
-      key: '1',
-      label: 'Настройка Участников',
-      headerClass: "!text-white",
-      children: <div className="w-full p-10 items-center flex flex-col ">
-        <PlayerList players={players} deletePlayer={onDeletePlayer} />
-        <Button type="primary" onClick={onNewPlayer}> Новый игрок </Button>
-      </div>,
-    },
-    {
-      key: '2',
-      label: 'Выбор пака',
-      headerClass: "!text-white ",
-      children: <div className="w-full h-full p-10 items-center flex flex-col">
-        <PackList />
-        <UploadPack />
-      </div>,
-    },
-  ], [onDeletePlayer, onNewPlayer, players]);
-
   return (
-    <>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
       <GameInfo game={game} />
-      <Collapse accordion items={items} defaultActiveKey="1" className="w-5/6 max-w-3xl" />
-    </>
+      <div className="grid items-start gap-3 sm:gap-4 lg:grid-cols-2">
+        <section aria-label="Настройка участников" className={CARD}>
+          <h2 className={TITLE}>Настройка участников</h2>
+          <PlayerList players={players} deletePlayer={onDeletePlayer} />
+          <Button type="primary" size="large" block className="mt-2" icon={<UserAddOutlined />} onClick={onNewPlayer}>
+            Новый игрок
+          </Button>
+        </section>
+        <section aria-label="Выбор пака" className={CARD}>
+          <h2 className={TITLE}>Выбор пака</h2>
+          <PackList />
+          <UploadPack />
+        </section>
+      </div>
+    </div>
   )
 })

@@ -1,7 +1,5 @@
-// src/components/MediaPlayer.tsx
-
 "use client";
-import { FC, memo, useCallback, useEffect, useRef, useState } from "react";
+import { CSSProperties, FC, ReactNode, memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   MediaController,
   MediaControlBar,
@@ -16,7 +14,7 @@ import ReactPlayer from "react-player";
 import { client } from "@/client";
 import { eventEmitter } from "@/eventEmitter";
 import { EventUpdateMediaPlayer } from "@/types";
-import { toMediaVolume, useGameStore } from "@/store/game";
+import { mediaPosition, toMediaVolume, useGameStore } from "@/store/game";
 import { notifyError } from "@/utils/notify";
 
 export enum MediaPlayerType {
@@ -24,18 +22,31 @@ export enum MediaPlayerType {
   Preview = "preview",
   Player = "player",
 }
+
+const FILL_MEDIA_STYLE = {
+  width: "100%",
+  height: "100%",
+  "--controls": "none",
+} as CSSProperties;
+
+const CONTROL = "h-10 w-10 p-2 shrink-0";
+
 const MediaPlayer: FC<{
   url: string;
   type: MediaPlayerType;
-  // eslint-disable-next-line react/display-name
-}> = memo(({ url, type }) => {
+  audio?: boolean;
+  idleOverlay?: ReactNode;
+}> = memo(function MediaPlayer({ url, type, audio, idleOverlay }) {
   const mediaRef = useRef<HTMLVideoElement>(null);
+  const synced = useRef(false);
+  const [idle, setIdle] = useState(true);
   const volume = useGameStore((state) =>
     toMediaVolume(type === MediaPlayerType.Admin ? state.settings?.adminVolume : state.settings?.playerVolume)
   );
   const updateMediaPlayer = useCallback((data: EventUpdateMediaPlayer) => {
     const media = mediaRef.current
     if (media) {
+      synced.current = true
       if (data.isPlaying) {
         media.play()?.catch(() => undefined)
       } else {
@@ -45,12 +56,28 @@ const MediaPlayer: FC<{
     }
   }, [mediaRef])
 
+  const applyStoredState = useCallback(() => {
+    const stored = useGameStore.getState().media
+    if (type !== MediaPlayerType.Player || synced.current || !stored) {
+      return
+    }
+    updateMediaPlayer({ time: mediaPosition(stored), isPlaying: stored.isPlaying })
+  }, [type, updateMediaPlayer])
+
+  const syncIdle = useCallback(() => {
+    const media = mediaRef.current
+    if (media) {
+      setIdle(media.paused && media.currentTime === 0)
+    }
+  }, [mediaRef])
+
   useEffect(() => {
     eventEmitter.on('updateMediaPlayer', updateMediaPlayer)
+    applyStoredState()
     return () => {
       eventEmitter.off('updateMediaPlayer', updateMediaPlayer)
     }
-  }, [updateMediaPlayer])
+  }, [updateMediaPlayer, applyStoredState])
 
   const handleUpdate = useCallback(async () => {
     if (!mediaRef.current) return;
@@ -65,19 +92,7 @@ const MediaPlayer: FC<{
     }
   }, [mediaRef])
 
-  const handlePlayPause = useCallback(() => {
-    mediaRef.current && handleUpdate();
-  }, [handleUpdate, mediaRef])
-
-  const handleSeekMouseUp = useCallback(() => {
-    mediaRef.current && handleUpdate();
-  }, [handleUpdate, mediaRef]);
-
-  const handleClickToButtons = useCallback(() => {
-    mediaRef.current && handleUpdate();
-  }, [handleUpdate, mediaRef]);
-
-  if (type === MediaPlayerType.Preview || type === MediaPlayerType.Player) {
+  if (type === MediaPlayerType.Player) {
     return (
       <div style={{ position: "relative", width: "100%", height: "100%" }}>
         <ReactPlayer
@@ -87,46 +102,47 @@ const MediaPlayer: FC<{
           volume={volume}
           controls={false}
           onClick={() => { }}
-          style={{
-            width: "100%",
-            height: "100%",
-            // @ts-ignore
-            "--controls": "none",
-          }}
+          onLoadedMetadata={applyStoredState}
+          onLoadedData={syncIdle}
+          onPlay={syncIdle}
+          onPause={syncIdle}
+          onSeeked={syncIdle}
+          onTimeUpdate={syncIdle}
+          style={FILL_MEDIA_STYLE}
         />
-        {type === MediaPlayerType.Preview && (
-          <div
-            className="w-full h-full absolute flex justify-center items-center bg-black/25"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
-              zIndex: 2,
-            }}
-          >
-            <PlayCircleOutlined
-              style={{
-                fontSize: 100,
-                filter: "invert(1) drop-shadow(0 0 8px #000)",
-              }}
-            />
+        {idleOverlay && idle && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="h-[56%] max-w-[56%] aspect-square">{idleOverlay}</div>
           </div>
         )}
       </div>
     );
   }
+
+  if (type === MediaPlayerType.Preview) {
+    return (
+      <div className="relative w-full h-full bg-black">
+        <ReactPlayer
+          ref={mediaRef}
+          src={url}
+          volume={volume}
+          controls={false}
+          muted
+          style={FILL_MEDIA_STYLE}
+        />
+        <div className="absolute inset-0 flex justify-center items-center bg-black/25 pointer-events-none">
+          <PlayCircleOutlined className="text-4xl text-white drop-shadow" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <MediaController
+      audio={audio}
       autohide="-1"
       gesturesDisabled
-      style={{
-        height: "100%",
-        width: "100%",
-        aspectRatio: "16/9",
-      }}
+      className={audio ? "block w-full rounded-lg overflow-hidden" : "block w-full h-full"}
     >
       <ReactPlayer
         ref={mediaRef}
@@ -134,44 +150,18 @@ const MediaPlayer: FC<{
         src={url}
         volume={volume}
         disablePictureInPicture
-        config={{
-          //@ts-ignore
-          file: {
-            attributes: {
-              controlsList: "nofullscreen",
-            },
-          },
-        }}
-        fullscreen={false}
         controls={false}
-        onPlay={handlePlayPause}
-        onPause={handlePlayPause}
-        style={{
-          width: "100%",
-          height: "100%",
-          // @ts-ignore
-          "--controls": "none",
-        }}
-      ></ReactPlayer>
-      <MediaControlBar className="flex items-center  p-2">
-        <MediaTimeDisplay showDuration className="text-lg" />
-
-        <MediaSeekBackwardButton
-          className="w-12 h-12 text-2xl"
-          seekOffset={10}
-          onClick={handleClickToButtons}
-        />
-        <MediaSeekForwardButton
-          className="w-12 h-12 text-2xl"
-          seekOffset={10}
-          onClick={handleClickToButtons}
-        />
-
-        <MediaTimeRange
-          className="h-4 flex-1"
-          onMouseUp={handleSeekMouseUp}
-        />
-        <MediaPlayButton className="w-12 h-12 text-2xl" />
+        onPlay={handleUpdate}
+        onPause={handleUpdate}
+        onSeeked={handleUpdate}
+        style={FILL_MEDIA_STYLE}
+      />
+      <MediaControlBar className="flex w-full items-center">
+        <MediaPlayButton className={CONTROL} />
+        <MediaSeekBackwardButton className={CONTROL} seekOffset={10} />
+        <MediaSeekForwardButton className={CONTROL} seekOffset={10} />
+        <MediaTimeRange className="h-10 min-w-0 flex-1" />
+        <MediaTimeDisplay showDuration className="h-10 shrink-0 px-2 text-sm" />
       </MediaControlBar>
     </MediaController>
   );

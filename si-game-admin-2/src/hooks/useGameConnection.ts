@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from "react"
-import Router from "next/router"
 import { client, hasErrorCode } from "@/client"
 import { AckErrorCode, Event, Screen } from "@/data"
 import { eventEmitter } from "@/eventEmitter"
@@ -26,6 +25,19 @@ export type GameRole = 'admin' | 'player'
 const QUESTION_ANIMATION_MS = 1000
 
 const store = () => useGameStore.getState()
+
+const openNextGame = async (role: GameRole, previousGameId: string) => {
+  let target = `/${role}`
+  try {
+    const games = await client.getGames()
+    const next = games.filter(game => game.gameId !== previousGameId).at(-1)
+    if (next) {
+      target = `/${role}/${encodeURIComponent(next.gameId)}`
+    }
+  } catch {
+  }
+  window.location.assign(`${target}${window.location.search}`)
+}
 
 export const useGameConnection = (gameId: string | undefined, role: GameRole) => {
   const refreshRef = useRef<() => Promise<void>>(async () => undefined)
@@ -94,6 +106,28 @@ export const useGameConnection = (gameId: string | undefined, role: GameRole) =>
       }
     }
 
+    let metaSeq = 0
+    const refreshMeta = async () => {
+      const seq = ++metaSeq
+      try {
+        const game = await client.getGame(gameId)
+        if (active && seq === metaSeq) {
+          store().updateMeta(game)
+        }
+      } catch {
+      }
+    }
+
+    const startScreensaver = () => {
+      store().startScreensaver()
+      void refreshMeta()
+    }
+
+    const updateMedia = (data: EventUpdateMediaPlayer) => {
+      store().setMedia(data)
+      eventEmitter.emit('updateMediaPlayer', data)
+    }
+
     const startQuestion = async (payload: PayloadStartQuestion, screen: Screen.Question | Screen.QuestionPreparation) => {
       if (role === 'player' && store().screen === Screen.Table) {
         store().setAnimatedQuestion(payload.id)
@@ -106,7 +140,7 @@ export const useGameConnection = (gameId: string | undefined, role: GameRole) =>
     }
 
     const unsubscribers = [
-      client.on(Event.OnStartScreensaver, onScreenPush(() => store().startScreensaver())),
+      client.on(Event.OnStartScreensaver, onScreenPush(startScreensaver)),
       client.on<EventStartQuestion>(Event.OnStartQuestion, onScreenPush(data => startQuestion(data.payload, Screen.Question))),
       client.on<EventStartQuestion>(Event.onStartQuestionPreparation, onScreenPush(data => startQuestion(data.payload, Screen.QuestionPreparation))),
       client.on<EventStartRoundName>(Event.OnStartRoundName, onScreenPush(data => store().startRoundName(data.payload))),
@@ -120,11 +154,12 @@ export const useGameConnection = (gameId: string | undefined, role: GameRole) =>
       client.on<ResponseGetSettings>(Event.OnUpdateSettings, applySettings),
       client.on<EventUpdateMediaPlayer>(Event.OnUpdateMediaPlayer, data => {
         if (role === 'player') {
-          eventEmitter.emit('updateMediaPlayer', data)
+          enqueue(() => updateMedia(data))
         }
       }),
       client.on(Event.OnExit, () => {
-        void Router.push('/')
+        active = false
+        void openNextGame(role, gameId)
       }),
       client.onReconnect(() => {
         if (store().status !== 'notFound') {

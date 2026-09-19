@@ -1,6 +1,6 @@
 import { client } from "@/client";
 import { ResponseGetSettings } from "@/types";
-import { Button, Flex, Modal, Slider, Space, Typography } from "antd";
+import { Button, Flex, Modal, Slider, Typography } from "antd";
 import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import { InputNumber } from "../override/InputNumber";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
@@ -9,12 +9,10 @@ import { notifyError } from "@/utils/notify";
 
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 
-// eslint-disable-next-line react/display-name
-export const ChangePointsModal: React.FC = memo(
-  () => {
+export const ChangePointsModal: React.FC<{ open: boolean; onBack: () => void }> = memo(
+  function ChangePointsModal({ open, onBack }) {
     const [data, setData] = useState<ResponseGetSettings>()
     const dataRef = useRef<ResponseGetSettings>()
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const updateData = useCallback((patch: Partial<ResponseGetSettings>) => {
       if (dataRef.current) {
@@ -22,14 +20,6 @@ export const ChangePointsModal: React.FC = memo(
         setData(dataRef.current)
       }
     }, [])
-
-    const showModal = useCallback(() => {
-      setIsModalOpen(true);
-    }, []);
-
-    const handleCancel = useCallback(() => {
-      setIsModalOpen(false);
-    }, []);
 
     const fetch = useCallback(async () => {
       try {
@@ -43,10 +33,10 @@ export const ChangePointsModal: React.FC = memo(
     }, [])
 
     useEffect(() => {
-      if (isModalOpen === true) {
+      if (open) {
         fetch()
       }
-    }, [fetch, isModalOpen])
+    }, [fetch, open])
 
     const save = useCallback(async (request: () => Promise<void>) => {
       try {
@@ -99,64 +89,56 @@ export const ChangePointsModal: React.FC = memo(
 
     return (
       <>
-        <Button type="primary" size="large" block onClick={showModal}>
-          Настройки
-        </Button>
         <Modal
           title="Настройки"
-          open={isModalOpen}
-          onCancel={handleCancel}
+          width={440}
+          open={open}
+          onCancel={onBack}
           footer={[
-            <Button block key="back" onClick={handleCancel}>
+            <Button block key="back" size="large" onClick={onBack}>
               Назад
             </Button>,
           ]}
         >
           <Flex vertical gap="small" className="w-full">
-            <Typography.Title level={5} >Настройка быстрых очков</Typography.Title>
-            <Space.Compact>
-              <span className="mr-2 w-32 flex items-center"> Маленький</span>
+            <Typography.Title level={5} className="!mb-0">Настройка быстрых очков</Typography.Title>
+            <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+              <span>Маленький</span>
               <InputNumber
                 className="!w-full"
                 min={0}
                 value={data?.little}
                 onChange={setLittle}
               />
-            </Space.Compact>
-            <Space.Compact>
-              <span className="mr-2 w-32 flex items-center"> Большой</span>
+              <span>Большой</span>
               <InputNumber
                 className="!w-full"
                 min={0}
                 value={data?.big}
                 onChange={setBig}
               />
-            </Space.Compact>
-          </Flex>
-          <Flex vertical gap="small" className="w-full">
-            <Typography.Title level={5} >Настройка звука</Typography.Title>
-            <Space.Compact>
-              <span className="mr-2 w-32 flex items-center"> Плеер</span>
+            </div>
+            <Typography.Title level={5} className="!mb-0 !mt-4">Настройка звука</Typography.Title>
+            <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2">
+              <span>Плеер</span>
               <Slider
-                className="grow"
+                className="!mx-2"
                 min={0}
                 max={100}
                 disabled={!data}
                 onChange={setPlayerVolume}
                 value={typeof data?.playerVolume === 'number' ? data.playerVolume : 0}
               />
-            </Space.Compact>
-            <Space.Compact>
-              <span className="mr-2 w-32 flex items-center"> Админ</span>
+              <span>Админ</span>
               <Slider
-                className="grow"
+                className="!mx-2"
                 min={0}
                 max={100}
                 disabled={!data}
                 onChange={setAdminVolume}
                 value={typeof data?.adminVolume === 'number' ? data.adminVolume : 0}
               />
-            </Space.Compact>
+            </div>
           </Flex>
         </Modal>
       </>

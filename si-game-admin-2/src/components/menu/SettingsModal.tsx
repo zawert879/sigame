@@ -8,20 +8,27 @@ import { Screen } from "@/data"
 import { useGameStore } from "@/store/game"
 import { notifyError } from "@/utils/notify"
 
-// eslint-disable-next-line react/display-name
-export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+export const SettingsModal: React.FC<{ refresh: () => void }> = memo(function SettingsModal({ refresh }) {
+  const [view, setView] = useState<'menu' | 'points' | 'players' | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const screen = useGameStore(state => state.screen)
   const canRepeat = screen === Screen.Question
   const canCancel = screen === Screen.Question || screen === Screen.QuestionPreparation
 
   const showModal = useCallback(() => {
-    setIsModalOpen(true)
+    setView('menu')
+  }, [])
+
+  const showPoints = useCallback(() => {
+    setView('points')
+  }, [])
+
+  const showPlayers = useCallback(() => {
+    setView('players')
   }, [])
 
   const handleCancel = useCallback(() => {
-    setIsModalOpen(false)
+    setView(null)
     refresh()
   }, [refresh])
 
@@ -29,7 +36,7 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh 
     setPending(key)
     try {
       await action()
-      setIsModalOpen(false)
+      setView(null)
     } catch (error) {
       notifyError(error, errorTitle)
     } finally {
@@ -71,15 +78,17 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh 
     <>
       <Button
         type="primary"
-        className="!h-24 !w-24 m-1"
+        className="!h-12 !w-12 shrink-0 sm:!h-14 sm:!w-14"
         size="large"
         aria-label="Меню"
+        title="Меню"
         onClick={showModal}
-        icon={<SettingOutlined style={{ fontSize: 48 }} />}
+        icon={<SettingOutlined className="text-2xl sm:text-3xl" />}
       />
       <Modal
         title="Меню"
-        open={isModalOpen}
+        width={440}
+        open={view === 'menu'}
         onCancel={handleCancel}
         footer={[
           <Button block key="back" size="large" onClick={handleCancel}>
@@ -100,13 +109,19 @@ export const SettingsModal: React.FC<{ refresh: () => void }> = memo(({ refresh 
           <Button type="primary" size="large" block disabled={!canCancel} loading={pending === 'cancelQuestion'} onClick={handleCancelQuestion}>
             Отменить вопрос
           </Button>
-          <ChangePointsModal />
-          <PlayerSettingsModal />
+          <Button type="primary" size="large" block onClick={showPoints}>
+            Настройки
+          </Button>
+          <Button type="primary" size="large" block onClick={showPlayers}>
+            Настройка игроков
+          </Button>
           <Button type="primary" size="large" block loading={pending === 'exit'} onClick={handleExit}>
             Выход
           </Button>
         </Flex>
       </Modal>
+      <ChangePointsModal open={view === 'points'} onBack={showModal} />
+      <PlayerSettingsModal open={view === 'players'} onBack={showModal} />
     </>
   )
 })
