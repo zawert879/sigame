@@ -1,8 +1,12 @@
 const { execFileSync, execSync } = require('child_process')
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 
 const PKG_PACKAGE = '@yao-pkg/pkg@6.22.0'
+const PKG_FETCH_PACKAGE = '@yao-pkg/pkg-fetch@3.6.5'
+const RESEDIT_PACKAGE = 'resedit-cli@3.1.1'
+const APP_NAME = 'SI Game'
 const NODE_RANGE = 'node24'
 const MIN_HOST_NODE_MAJOR = 22
 
@@ -26,6 +30,7 @@ const USAGE = 'Usage: node scripts/package.js <win|mac|mac-arm64|mac-x64|native|
 const root = path.resolve(__dirname, '..')
 const releaseDir = path.join(root, 'release')
 const sidecarDir = path.join(root, 'launcher', 'src-tauri', 'binaries')
+const windowsIcon = path.join(root, 'launcher', 'src-tauri', 'icons', 'icon.ico')
 
 const isMacTarget = name => name.startsWith('mac-')
 
@@ -47,8 +52,53 @@ const sidecarPath = name => {
   return path.join(sidecarDir, `sigame-server-${triple}${extension}`)
 }
 
-const run = command => {
-  execSync(command, { cwd: root, stdio: 'inherit', shell: true })
+const run = (command, env = process.env) => {
+  execSync(command, { cwd: root, stdio: 'inherit', shell: true, env })
+}
+
+const serverVersion = () =>
+  JSON.parse(fs.readFileSync(path.join(root, 'si-game-service', 'package.json'), 'utf8')).version
+
+const windowsFileVersion = version => {
+  const parts = version.split(/[.+-]/).map(Number).filter(Number.isInteger).slice(0, 3)
+  while (parts.length < 4) {
+    parts.push(0)
+  }
+
+  return parts.join('.')
+}
+
+const fetchBaseBinary = pkgTarget => {
+  const [range, platform, arch] = pkgTarget.split('-')
+  const output = execSync(`npx --yes --loglevel=error ${PKG_FETCH_PACKAGE} -n ${range} -p ${platform} -a ${arch}`, {
+    cwd: root,
+    encoding: 'utf8',
+    shell: true,
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  const match = /^> (.+)$/m.exec(output)
+  const file = match?.[1].trim()
+  if (!file || !fs.existsSync(file)) {
+    throw new Error(`${PKG_FETCH_PACKAGE} did not report the ${pkgTarget} base binary:\n${output}`)
+  }
+
+  return file
+}
+
+const brandWindowsBase = (pkgTarget, outputFile) => {
+  const base = fetchBaseBinary(pkgTarget)
+  const branded = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sigame-base-')), `${path.basename(base)}.exe`)
+  const version = windowsFileVersion(serverVersion())
+  const name = path.basename(outputFile)
+  run([
+    `npx --yes --loglevel=error ${RESEDIT_PACKAGE}`,
+    `--in "${base}" --out "${branded}" --ignore-signed --allow-shrink --lang 1033`,
+    `--company-name "${APP_NAME}" --product-name "${APP_NAME}" --file-description "${APP_NAME}"`,
+    `--internal-name "${path.parse(name).name}" --original-filename "${name}"`,
+    `--file-version ${version} --product-version ${version}`,
+    `--delete-allicon --icon "1,${windowsIcon}"`,
+  ].join(' '))
+  return branded
 }
 
 const checkHostNode = () => {
@@ -79,7 +129,8 @@ const packageTarget = (name, { sidecar = false } = {}) => {
   const { pkgTarget, output } = TARGETS[name]
   const outputFile = sidecar ? sidecarPath(name) : path.join(releaseDir, output)
   fs.mkdirSync(path.dirname(outputFile), { recursive: true })
-  run(`npx --yes --loglevel=error ${PKG_PACKAGE} package.json --targets ${pkgTarget} --no-bytecode --public --public-packages "*" --output "${outputFile}"`)
+  const env = isMacTarget(name) ? process.env : { ...process.env, PKG_NODE_PATH: brandWindowsBase(pkgTarget, outputFile) }
+  run(`npx --yes --loglevel=error ${PKG_PACKAGE} package.json --targets ${pkgTarget} --no-bytecode --public --public-packages "*" --output "${outputFile}"`, env)
 
   if (isMacTarget(name)) {
     signMacBinary(outputFile)

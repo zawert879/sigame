@@ -40,7 +40,7 @@ mod windows {
 
     use crate::state::Firewall;
 
-    const RULE: &str = "SI Game";
+    const RULE: &str = "SI Game server";
     const NO_RIGHTS: &str = "Нет прав администратора";
     const WAIT_MS: u32 = 120_000;
 

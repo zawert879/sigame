@@ -19,7 +19,7 @@ C1/C2/C6 (Docker-деплой) закрыты удалением деплоя п
 | Целостность пака по `<files>` (SHA-256), статус в списке паков | open | Семантика хеша проверена на реальном паке, см. [[dev-siq-format]] |
 | Обложка пака (`logo`) на заставке и миниатюры в списке паков | open | `GET /api/packs/logo?file=` |
 | Нативное окно запуска (Tauri 2) | in progress | `docs/LAUNCHER-PLAN.md` (контракт в конце), превью `docs/launcher-preview.html`. Решения 2026-09-19: в релизе только окно (DMG ×2 + установщик Windows), кнопка брандмауэра с UAC, ТВ — окно Chrome/Edge `--app` с автозвуком |
-| Метаданные exe (имя «SI Game» в запросе брандмауэра) | open | Патчить базовый node-бинарник до pkg, иначе ломается payload |
+| Метаданные exe (имя «SI Game» в запросе брандмауэра) | done 2026-09-19 | `scripts/package.js`: pkg-fetch → `resedit-cli` на копии базового Node → pkg с `PKG_NODE_PATH`; правило лаунчера переименовано в «SI Game server» |
 | Подпись Apple Developer ID / Windows | by user decision | Без неё Gatekeeper и SmartScreen при первом запуске |
 | Имя игры по умолчанию на сервере «Default» | low | Фронт показывает «Без названия» |
 | Стенд визуальной проверки (headless Chrome + детектор) в репо | idea | Сейчас не сохранён; был в scratchpad сессии 2026-09-19 |
