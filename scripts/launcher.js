@@ -108,7 +108,7 @@ const releaseDirOf = name => {
 const buildPortable = (name, version) => {
   const { suffix } = BUNDLES[name]
   embedServer(name)
-  run(`yarn tauri build --target ${TARGETS[name].triple} --bundles none --features embedded-server`, launcherDir)
+  run(`yarn tauri build --target ${TARGETS[name].triple} --no-bundle --features embedded-server`, launcherDir)
 
   const dir = releaseDirOf(name)
   const built = PORTABLE_NAMES.map(file => path.join(dir, file)).find(file => fs.existsSync(file))
