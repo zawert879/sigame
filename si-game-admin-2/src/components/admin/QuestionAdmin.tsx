@@ -36,8 +36,24 @@ const replicHeight = (page: PageSnapshotType, compact?: boolean): string => {
   return length > 500 ? "h-48 lg:h-[34%]" : length > 200 ? "h-32 lg:h-[28%]" : "h-20 lg:h-[24%]"
 }
 
-const answerText = (question: PayloadStartQuestion): string =>
-  (question.rightAnswer ?? []).map(answer => answer.trim()).filter(Boolean).join("\n");
+const optionText = (question: PayloadStartQuestion, variant: string): string => {
+  const option = question.answerGroup.find(item => item.variant.trim().toLowerCase() === variant.toLowerCase())
+  if (!option || typeof option.answer === "object") {
+    return variant
+  }
+
+  const text = formatPageText(option.answer).trim()
+  return text ? `${variant} — ${text}` : variant
+}
+
+const answerText = (question: PayloadStartQuestion): string => {
+  const answers = (question.rightAnswer ?? []).map(answer => answer.trim()).filter(Boolean)
+  if (question.answerType !== QuestionAnswerType.Group) {
+    return answers.join("\n")
+  }
+
+  return answers.map(answer => optionText(question, answer)).join("\n")
+}
 
 const hasOptions = (question: PayloadStartQuestion): boolean =>
   question.answerType === QuestionAnswerType.Group && question.answerGroup.length > 0;
@@ -60,18 +76,26 @@ const QuestionInfo: FC<{ question: PayloadStartQuestion }> = ({ question }) => (
   </div>
 );
 
+const optionsTextSize = (count: number): string => {
+  if (count > 6) {
+    return "text-[11px] leading-snug lg:text-xs"
+  }
+
+  return count > 4 ? "text-xs lg:text-sm" : "text-sm lg:text-base"
+}
+
 const AnswerOptions: FC<{ question: PayloadStartQuestion }> = ({ question }) => {
   const gameId = useGameStore(state => state.gameId)
   const right = new Set((question.rightAnswer ?? []).map(answer => answer.trim().toLowerCase()))
   return (
-    <ul aria-label="Варианты ответа" className="m-0 grid shrink-0 list-none auto-rows-min grid-cols-1 gap-1 p-0 text-sm sm:grid-cols-2 lg:max-h-[55%] lg:min-h-0 lg:shrink lg:overflow-y-auto lg:text-base">
+    <ul aria-label="Варианты ответа" className={`m-0 grid shrink-0 list-none auto-rows-min grid-cols-1 gap-1 p-0 sm:grid-cols-2 lg:max-h-[62%] lg:min-h-0 lg:shrink lg:overflow-y-auto ${optionsTextSize(question.answerGroup.length)}`}>
       {question.answerGroup.map(option => {
         const isRight = right.has(option.variant.trim().toLowerCase())
         return (
           <li
             key={option.variant}
             aria-label={isRight ? `${option.variant}: правильный вариант` : undefined}
-            className={`flex min-w-0 items-center gap-2 rounded-md px-2 py-1 ${isRight ? "bg-green-600 ring-2 ring-green-300" : "bg-blue-950/50"}`}
+            className={`flex min-w-0 items-center gap-2 rounded-md px-2 ${question.answerGroup.length > 6 ? "py-0.5" : "py-1"} ${isRight ? "bg-green-600 ring-2 ring-green-300" : "bg-blue-950/50"}`}
           >
             <span className="shrink-0 font-bold text-yellow-200">{option.variant}</span>
             {typeof option.answer !== "object"
