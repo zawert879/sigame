@@ -81,3 +81,33 @@ mod windows {
         }
     }
 }
+
+#[cfg(windows)]
+pub fn show_startup_error(message: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+
+    let wide = |value: &str| -> Vec<u16> {
+        OsStr::new(value)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    };
+    let text = wide(&format!(
+        "Не удалось открыть окно игры.\n\n{message}\n\nОбычно не хватает компонента Microsoft Edge WebView2. Установите его с сайта Microsoft (Evergreen WebView2 Runtime) и запустите игру снова."
+    ));
+    let caption = wide("SI Game");
+    unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            text.as_ptr(),
+            caption.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub fn show_startup_error(_message: &str) {}

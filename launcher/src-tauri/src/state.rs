@@ -136,7 +136,9 @@ impl Launcher {
             platform: Platform::current(),
             tv_browser,
             firewall,
-            server_path: paths::sidecar_path().ok().map(|path| paths::display(&path)),
+            server_path: crate::server::expected_program_path(&paths)
+                .as_deref()
+                .map(paths::display),
         };
         Self {
             settings: Mutex::new(settings::load(&settings_path)),

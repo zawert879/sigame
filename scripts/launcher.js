@@ -2,6 +2,7 @@ const { execSync } = require('child_process')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const zlib = require('zlib')
 const { TARGETS, buildApp, checkHostNode, nativeTarget, packageTarget, sidecarPath } = require('./package')
 
 const root = path.resolve(__dirname, '..')
@@ -12,7 +13,7 @@ const releaseDir = path.join(root, 'release')
 const BUNDLES = {
   'mac-arm64': { host: 'darwin', bundle: 'dmg', extension: '.dmg', suffix: 'macos-arm64.dmg' },
   'mac-x64': { host: 'darwin', bundle: 'dmg', extension: '.dmg', suffix: 'macos-x64.dmg' },
-  win: { host: 'win32', bundle: 'nsis', extension: '-setup.exe', suffix: 'windows-x64-setup.exe' },
+  win: { host: 'win32', portable: true, suffix: 'windows-x64.exe' },
 }
 
 const MODES = {
@@ -85,6 +86,42 @@ const prepareSidecars = (names, flags) => {
   }
 }
 
+const ZSTD_LEVEL = 19
+const embeddedDir = path.join(tauriDir, 'embedded')
+const PORTABLE_NAMES = ['SI Game.exe', 'sigame-launcher.exe']
+
+const embedServer = name => {
+  const source = sidecarPath(name)
+  const data = fs.readFileSync(source)
+  const packed = zlib.zstdCompressSync(data, { params: { [zlib.constants.ZSTD_c_compressionLevel]: ZSTD_LEVEL } })
+  fs.mkdirSync(embeddedDir, { recursive: true })
+  fs.writeFileSync(path.join(embeddedDir, 'sigame-server.zst'), packed)
+  const mb = bytes => (bytes / 1e6).toFixed(1)
+  console.log(`Embedded ${path.basename(source)}: ${mb(data.length)} MB -> ${mb(packed.length)} MB`)
+}
+
+const releaseDirOf = name => {
+  const targetDir = process.env.CARGO_TARGET_DIR ? path.resolve(tauriDir, process.env.CARGO_TARGET_DIR) : path.join(tauriDir, 'target')
+  return path.join(targetDir, TARGETS[name].triple, 'release')
+}
+
+const buildPortable = (name, version) => {
+  const { suffix } = BUNDLES[name]
+  embedServer(name)
+  run(`yarn tauri build --target ${TARGETS[name].triple} --bundles none --features embedded-server`, launcherDir)
+
+  const dir = releaseDirOf(name)
+  const built = PORTABLE_NAMES.map(file => path.join(dir, file)).find(file => fs.existsSync(file))
+  if (!built) {
+    throw new Error(`tauri build produced no executable in ${path.relative(root, dir)}`)
+  }
+
+  const target = path.join(releaseDir, `SI-Game-${version}-${suffix}`)
+  fs.mkdirSync(releaseDir, { recursive: true })
+  fs.copyFileSync(built, target)
+  console.log(`Created ${path.relative(root, target)} (${path.basename(built)})`)
+}
+
 const bundleDir = (name, bundle) => {
   const targetDir = process.env.CARGO_TARGET_DIR ? path.resolve(tauriDir, process.env.CARGO_TARGET_DIR) : path.join(tauriDir, 'target')
   return path.join(targetDir, TARGETS[name].triple, 'release', 'bundle', bundle)
@@ -106,6 +143,11 @@ const findBundle = (dir, extension, since) => {
 }
 
 const buildLauncher = (name, version) => {
+  if (BUNDLES[name].portable) {
+    buildPortable(name, version)
+    return
+  }
+
   const { bundle, extension, suffix } = BUNDLES[name]
   const startedAt = Date.now() - 2000
   run(`yarn tauri build --target ${TARGETS[name].triple} --bundles ${bundle}`, launcherDir)

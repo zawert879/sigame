@@ -3,9 +3,10 @@ use std::time::Duration;
 
 use tauri::async_runtime::Receiver;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_shell::process::{CommandEvent, TerminatedPayload};
+use tauri_plugin_shell::process::{Command, CommandEvent, TerminatedPayload};
 use tauri_plugin_shell::ShellExt;
 
+use crate::paths::Paths;
 use crate::platform;
 use crate::protocol::{self, Connections, Message};
 use crate::state::{Launcher, Status};
@@ -42,6 +43,39 @@ pub fn restart(app: &AppHandle) {
     start_locked(app, &launcher);
 }
 
+#[cfg(feature = "embedded-server")]
+pub fn expected_program_path(paths: &Paths) -> Option<std::path::PathBuf> {
+    Some(crate::embedded::server_path(&paths.internal))
+}
+
+#[cfg(not(feature = "embedded-server"))]
+pub fn expected_program_path(_paths: &Paths) -> Option<std::path::PathBuf> {
+    crate::paths::sidecar_path().ok()
+}
+
+#[cfg(feature = "embedded-server")]
+pub fn program_path(paths: &Paths) -> std::io::Result<std::path::PathBuf> {
+    crate::embedded::ensure_server(&paths.internal, env!("CARGO_PKG_VERSION"))
+}
+
+#[cfg(not(feature = "embedded-server"))]
+pub fn program_path(_paths: &Paths) -> std::io::Result<std::path::PathBuf> {
+    crate::paths::sidecar_path()
+}
+
+#[cfg(feature = "embedded-server")]
+fn server_command(app: &AppHandle, paths: &Paths) -> Result<Command, String> {
+    let path = program_path(paths).map_err(|error| error.to_string())?;
+    Ok(app.shell().command(path))
+}
+
+#[cfg(not(feature = "embedded-server"))]
+fn server_command(app: &AppHandle, _paths: &Paths) -> Result<Command, String> {
+    app.shell()
+        .sidecar(SIDECAR)
+        .map_err(|error| error.to_string())
+}
+
 fn start_locked(app: &AppHandle, launcher: &Launcher) {
     let generation = {
         let mut slot = launcher.server();
@@ -63,7 +97,7 @@ fn start_locked(app: &AppHandle, launcher: &Launcher) {
     if let Err(error) = paths.ensure() {
         log::warn!("Не удалось создать каталоги данных: {error}");
     }
-    let spawned = app.shell().sidecar(SIDECAR).and_then(|command| {
+    let spawned = server_command(app, paths).and_then(|command| {
         command
             .env_clear()
             .envs(std::env::vars_os().filter(|(key, _)| !is_reserved_env(key)))
@@ -72,6 +106,7 @@ fn start_locked(app: &AppHandle, launcher: &Launcher) {
             .env("PACKAGES_DIR", &paths.packages)
             .current_dir(&paths.data)
             .spawn()
+            .map_err(|error| error.to_string())
     });
     match spawned {
         Ok((events, child)) => {

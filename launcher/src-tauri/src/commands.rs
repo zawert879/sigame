@@ -35,6 +35,14 @@ fn open_folder(app: &AppHandle, dir: PathBuf) -> CommandResult<()> {
         .map_err(|error| format!("Не удалось открыть папку: {error}"))
 }
 
+fn server_program(app: &AppHandle) -> std::io::Result<PathBuf> {
+    let paths = app
+        .try_state::<Launcher>()
+        .map(|launcher| launcher.paths.clone())
+        .ok_or_else(|| std::io::Error::other("окно ещё не готово"))?;
+    server::program_path(&paths)
+}
+
 async fn blocking<T, F>(task: F) -> CommandResult<T>
 where
     T: Send + 'static,
@@ -125,7 +133,7 @@ pub fn open_logs_folder(app: AppHandle, launcher: State<'_, Launcher>) -> Comman
 #[tauri::command]
 pub async fn allow_firewall(app: AppHandle) -> CommandResult<()> {
     let program =
-        paths::sidecar_path().map_err(|error| format!("Не найден файл сервера: {error}"))?;
+        server_program(&app).map_err(|error| format!("Не найден файл сервера: {error}"))?;
     let checked = program.clone();
     let result = blocking(move || firewall::allow(&program)).await?;
     let status = blocking(move || firewall::status(&checked)).await?;
@@ -161,7 +169,7 @@ pub fn refresh_firewall(app: &AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let Ok(program) = paths::sidecar_path() else {
+        let Ok(program) = server_program(&app) else {
             return;
         };
         let status = firewall::status(&program);

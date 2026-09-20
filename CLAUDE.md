@@ -65,7 +65,7 @@ yarn package:mac    # (корень) → release/sigame-macos-arm64|x64 (+ .tar.
 yarn package:all    # сайдкар для лаунчера: node scripts/package.js <mac-arm64|mac-x64|win> --sidecar [--skip-build]
 yarn smoke          # (корень) после build: поднимает сервер и проверяет страницы, ассеты, REST, socket.io
 yarn launcher:mac   # build → сайдкары → tauri build → release/SI-Game-<v>-macos-arm64|x64.dmg (локально CI=true, иначе Finder-скрипт DMG)
-yarn launcher:win   # только на Windows → release/SI-Game-<v>-windows-x64-setup.exe
+yarn launcher:win   # только на Windows → release/SI-Game-<v>-windows-x64.exe (портативный: сервер зашит внутрь)
 yarn launcher:dev   # tauri dev с сайдкаром этой машины
 yarn launcher:icons # иконки из launcher/src-tauri/icons/source.svg
 
@@ -126,8 +126,13 @@ Env сервера: `PORT`, `ADMIN_TOKEN` (opt-in защита управлен�
   «Далее» — в строке действий под превью экрана (`components/admin/HostActions.tsx`: отвечающий, ✕/✓, кнопка с подписью
   следующего шага, клавиша PageDown); на телефоне — вертикальная прокрутка, таблица игроков всегда доступна. Полосу цены на ТВ
   (`player/QuestionScore.tsx`) не менять — пользователь доволен её размером.
-- **Окно запуска.** `launcher/src-tauri` запускает сайдкар `sigame-server` (pkg-сборка сервера) с `SIGAME_LAUNCHER=1`,
-  `SIQ_DIR`/`PACKAGES_DIR` в `~/Library/Application Support/SIGame` / `%LOCALAPPDATA%\SIGame`. Сервер в этом режиме
+- **Окно запуска.** `launcher/src-tauri` запускает сайдкар `sigame-server` (pkg-сборка сервера) с `SIGAME_LAUNCHER=1` и
+  `SIQ_DIR`/`PACKAGES_DIR` из `paths.rs`: macOS — `~/SI Game`, Windows и Linux — папка рядом с исполняемым файлом
+  (если туда нельзя писать — `%LOCALAPPDATA%\SIGame` / `~/Library/Application Support/SIGame`); паки лежат в `<данные>/siq`,
+  служебное — в `<данные>/data`. Паки из старого места переносятся при первом запуске (`Paths::adopt_legacy_packs`).
+  Сборка Windows — один портативный exe: сервер сжат zstd и зашит в бинарник (фича Cargo `embedded-server`,
+  `scripts/launcher.js` кладёт `launcher/src-tauri/embedded/sigame-server.zst`), при первом запуске распаковывается
+  в `<данные>/data` по метке версии. Сервер в этом режиме
   пишет в stdout `SIGAME_READY|SIGAME_STATUS|SIGAME_FAILED {json}` (`src/launcherStatus.ts`), считает сокеты по `auth.role`
   (`player`/`admin`, ставит `client/index.ts`) и завершается, когда закрыт stdin. Rust держит `LauncherState` и шлёт окну
   событие `launcher-state`; команды — `commands.rs`. Контракт — конец `docs/LAUNCHER-PLAN.md`.

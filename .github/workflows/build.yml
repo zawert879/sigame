@@ -40,7 +40,7 @@ jobs:
             platform: win
             artifact: windows-x64
             sidecar: sigame-server-x86_64-pc-windows-msvc.exe
-            file: windows-x64-setup.exe
+            file: windows-x64.exe
     defaults:
       run:
         shell: bash

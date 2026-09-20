@@ -1,5 +1,7 @@
 mod browser;
 mod commands;
+#[cfg(feature = "embedded-server")]
+mod embedded;
 mod firewall;
 mod paths;
 mod platform;
@@ -122,6 +124,7 @@ pub fn run() {
                 tv_browser,
             ));
             let handle = app.handle();
+            paths.adopt_legacy_packs();
             server::start(handle);
             commands::refresh_firewall(handle);
             Ok(())
@@ -132,6 +135,7 @@ pub fn run() {
         Err(error) => {
             log::error!("Не удалось запустить окно: {error}");
             eprintln!("SI Game: {error}");
+            platform::show_startup_error(&error.to_string());
             std::process::exit(1);
         }
     };

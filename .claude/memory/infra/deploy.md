@@ -13,7 +13,7 @@ Docker-деплой (GHCR + dcm.zawserv.ru) удалён 2026-09-18 по реш�
 |---|---|---|
 | `.github/workflows/check.yml` | pull_request, workflow_call | Linux: install (frozen) → typecheck/lint/test сервиса, typecheck/lint админки, `yarn build`, `yarn smoke` |
 | `.github/workflows/build.yml` | push в любую ветку, workflow_dispatch, workflow_call | check → матрица `launcher`: macos-latest × aarch64/x86_64, windows-latest × x86_64-pc-windows-msvc: build → сайдкар (`package.js <t> --sidecar`) → smoke сайдкара (x64 через Rosetta) → `launcher.js <t> --skip-build --skip-sidecar` → артефакты `sigame-launcher-macos-arm64|macos-x64|windows-x64` (14 дней) |
-| `.github/workflows/release.yml` | тег `v*`, workflow_dispatch(tag) | build.yml → GitHub Release только с `SI-Game-<v>-macos-arm64.dmg`, `…-macos-x64.dmg`, `…-windows-x64-setup.exe` |
+| `.github/workflows/release.yml` | тег `v*`, workflow_dispatch(tag) | build.yml → GitHub Release только с `SI-Game-<v>-macos-arm64.dmg`, `…-macos-x64.dmg`, `…-windows-x64.exe` |
 
 Сайдкар — `@yao-pkg/pkg@6.22.0` с `--no-bytecode`, Node 24; mac-сайдкар подписывается ad-hoc. Tauri 2.11 собирает `.app`/DMG
 (ad-hoc `signingIdentity "-"`, без hardened runtime, entitlements allow-jit) и NSIS (установка для текущего пользователя).

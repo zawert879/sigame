@@ -167,6 +167,9 @@ stdout — строки `ПРЕФИКС {json}` (UTF-8, одна строка н
 
 - `scripts/launcher.js <mac|mac-arm64|mac-x64|win>`: `yarn build` → pkg-сайдкар нужной архитектуры в
   `launcher/src-tauri/binaries/` → `tauri build --target <triple>` → `release/SI-Game-<version>-macos-arm64.dmg`,
-  `…-macos-x64.dmg`, `…-windows-x64-setup.exe`. macOS: ad-hoc подпись (`signingIdentity "-"`), без hardened runtime.
+  `…-macos-x64.dmg`, `…-windows-x64.exe`. macOS: ad-hoc подпись (`signingIdentity "-"`), без hardened runtime.
+  Windows (решение пользователя 2026-09-20): без установщика — один портативный exe, сервер сжат zstd и зашит внутрь
+  (фича `embedded-server`), распаковывается при первом запуске рядом с exe. Паки: macOS — `~/SI Game/siq`,
+  Windows — `siq` рядом с exe (если папка только для чтения — `%LOCALAPPDATA%\SIGame`), старые переносятся автоматически.
 - CI (`build.yml`): check → матрица macos-latest (aarch64, x86_64) + windows-latest → артефакты `sigame-launcher-*`;
   `release.yml` публикует только DMG и установщик Windows.

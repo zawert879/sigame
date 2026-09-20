@@ -54,6 +54,6 @@ jobs:
           files: |
             release/SI-Game-*-macos-arm64.dmg
             release/SI-Game-*-macos-x64.dmg
-            release/SI-Game-*-windows-x64-setup.exe
+            release/SI-Game-*-windows-x64.exe
           fail_on_unmatched_files: true
           generate_release_notes: true
