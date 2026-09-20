@@ -1,6 +1,6 @@
 [package]
 name = "sigame-launcher"
-version = "1.0.0"
+version = "1.1.0"
 description = "SI Game"
 edition = "2021"
 publish = false
