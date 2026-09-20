@@ -116,7 +116,7 @@ export const QuestionTable: FC<QuestionTableProps> = memo(function QuestionTable
               className={`${CELL} px-[2vmin] text-[0.62em] ${available ? "cursor-pointer hover:bg-gray-300" : ""}`}
               onClick={available ? handleSelectQuestion(question.id) : undefined}
             >
-              {available && <FitText>{formatPageText(theme.name)}</FitText>}
+              <FitText className={available ? "" : "text-white/40 line-through decoration-white/60"}>{formatPageText(theme.name)}</FitText>
             </div>
           );
         })}

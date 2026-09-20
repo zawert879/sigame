@@ -659,11 +659,38 @@ export class Game {
     this._mediaPlayer.reset(true)
   }
 
+  private preparedPrice(question: Question): number {
+    const select = question.selectPrice
+    if (question.type === QuestionType.STAKE) {
+      return question.price > 0 ? question.price : select?.minimum ?? 0
+    }
+
+    if (select && select.minimum > 0) {
+      return select.minimum
+    }
+
+    if (question.price > 0) {
+      return question.price
+    }
+
+    return this.maxRoundPrice()
+  }
+
+  private maxRoundPrice(): number {
+    const round = this._package?.currentRound
+    if (!round) {
+      return 0
+    }
+
+    return round.questions.reduce((max, item) => Math.max(max, item.price), 0)
+  }
+
   private prepareQuestion(question: Question) {
     this._package?.setCurrentQuestion(question)
     question.restart()
     this._queuePlayers.clear()
     this._isButtonsActive = false
+    this._score.setValue(this.preparedPrice(question))
     this.setScreen(Screen.QuestionPreparation)
   }
 

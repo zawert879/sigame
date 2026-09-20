@@ -201,8 +201,8 @@ describe('Game: screens', () => {
     expect(game.screen).toBe(Screen.QuestionPreparation)
     expect(game.package?.currentQuestion).toBe(stake)
     expect(game.isButtonsActive).toBe(false)
-    expect(game.score.value).toBe(777)
-    expect(recorder.names()).toEqual([GameEvent.StartQuestionPreparation])
+    expect(game.score.value).toBe(200)
+    expect(recorder.names()).toEqual([GameEvent.UpdateScoreValue, GameEvent.StartQuestionPreparation])
 
     recorder.clear()
     game.next()
@@ -214,6 +214,20 @@ describe('Game: screens', () => {
     game.next()
     expect(game.screen).toBe(Screen.Table)
     expect(stake.isAvailable).toBe(false)
+  })
+
+  test('a special question starts from its own price, not from the previous one', async () => {
+    const game = await tableGame()
+    game.score.setValue(777)
+
+    game.selectQuestion(question(game, 400).id)
+    expect(game.screen).toBe(Screen.QuestionPreparation)
+    expect(game.score.value).toBe(400)
+
+    game.cancelQuestion()
+    game.score.setValue(777)
+    game.selectQuestion(question(game, 500).id)
+    expect(game.score.value).toBe(500)
   })
 
   test.each([
