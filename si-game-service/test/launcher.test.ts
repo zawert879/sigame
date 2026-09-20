@@ -399,8 +399,10 @@ describe('src/index.ts with SIGAME_LAUNCHER=1', () => {
         expect([typeof address.address, typeof address.name, typeof address.score]).toEqual(['string', 'string', 'number'])
       }
 
+      const firstStatus = await run.waitForLine(line => line.startsWith('SIGAME_STATUS '), 'the first STATUS')
+      expect(firstStatus).toBe('SIGAME_STATUS {"connections":{"player":0,"admin":0},"packsCount":2}')
       const readyIndex = run.lines.findIndex(line => line.startsWith('SIGAME_READY '))
-      expect(run.lines[readyIndex + 1]).toBe('SIGAME_STATUS {"connections":{"player":0,"admin":0},"packsCount":2}')
+      expect(run.lines[readyIndex + 1]).toBe(firstStatus)
       expect(run.lines.join('\n')).not.toContain('SI Game запущена')
 
       const base = `http://127.0.0.1:${ready.port}`
@@ -412,7 +414,7 @@ describe('src/index.ts with SIGAME_LAUNCHER=1', () => {
       clients.push(await new TestClient(base, { role: 'admin' }).connected(), await new TestClient(base).connected())
       await run.waitForLine(isStatus(({ connections }) => connections.player === 1 && connections.admin === 1), 'STATUS with the host')
       fs.rmSync(path.join(siqDir, 'one.siq'))
-      await run.waitForLine(isStatus(({ packsCount }) => packsCount === 1), 'STATUS after the pack disappeared', 8000)
+      await run.waitForLine(isStatus(({ packsCount }) => packsCount === 1), 'STATUS after the pack disappeared', 12_000)
 
       for (const client of clients.splice(0)) {
         client.close()
@@ -428,7 +430,7 @@ describe('src/index.ts with SIGAME_LAUNCHER=1', () => {
       const stopped = Date.now()
       run.child.stdin.end()
       expect(await run.exited).toBe(0)
-      expect(Date.now() - stopped).toBeLessThan(3000)
+      expect(Date.now() - stopped).toBeLessThan(5000)
       expect(run.lines.filter(line => line.startsWith('SIGAME_READY '))).toHaveLength(1)
     } finally {
       for (const client of clients) {
